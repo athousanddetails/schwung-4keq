@@ -425,15 +425,40 @@ int main(int argc, char **argv)
 
     printf("\n== realtime factor ==\n");
     {
+        /* Four states per oversampling mode, because "CPU usage" is not one
+         * number and the interesting part is what you pay when you are NOT
+         * using the EQ.
+         *
+         * The console nonlinearity can never be switched off — upstream's
+         * consoleSatAmount() returns 0.25 native in Brown and 0.50 in Black
+         * even with the saturation control at zero — so it is inside EVERY
+         * row below, bypass included is the only exception. FLAT is therefore
+         * very close to "the saturator, the gains and the meters", which is
+         * what a master-bus insert sitting at unity actually costs.
+         *
+         * A band at exactly 0 dB is bypassed and reset by the core, and a
+         * pair-correction only runs when BOTH its members are non-zero, so
+         * FLAT really does skip the biquads rather than running them at
+         * unity. */
+        struct State { const char *name; int bands; bool filters; bool byp; };
+        static const State kStates[] = {
+            { "bypass",   0, false, true  },
+            { "flat",     0, false, false },
+            { "2 bands",  2, false, false },
+            { "all-live", 4, true,  false },
+        };
         const char *names[3] = { "1x", "2x", "4x" };
         for (int m = 0; m < 3; m++) {
+          for (const State &st : kStates) {
             void *ti = api->create_instance(".", nullptr);
             set(api, ti, "oversampling", names[m]);
-            /* everything live: the worst case the module can be put in */
-            set(api, ti, "hpf_enabled", "On");  set(api, ti, "hpf_freq", "80");
-            set(api, ti, "lpf_enabled", "On");  set(api, ti, "lpf_freq", "12000");
-            set(api, ti, "lf_gain", "6");  set(api, ti, "lm_gain", "-4");
-            set(api, ti, "hm_gain", "5");  set(api, ti, "hf_gain", "3");
+            if (st.byp) set(api, ti, "bypass", "On");
+            if (st.filters) {
+                set(api, ti, "hpf_freq", "80");
+                set(api, ti, "lpf_freq", "12000");
+            }
+            if (st.bands >= 2) { set(api, ti, "lf_gain", "6");  set(api, ti, "hf_gain", "3"); }
+            if (st.bands >= 4) { set(api, ti, "lm_gain", "-4"); set(api, ti, "hm_gain", "5"); }
 
             std::vector<int16_t> sig;
             fill_signal(sig, 0.5f);
@@ -446,11 +471,13 @@ int main(int argc, char **argv)
             const double audio = (double)blocks * MOVE_FRAMES_PER_BLOCK / 44100.0;
             const double frac = secs / audio;
             const double per_block_us = secs / blocks * 1e6;
-            printf("  --   %s all-live: %.2f%% of one core, %.1f us per 128-frame block\n",
-                   names[m], frac * 100.0, per_block_us);
+            printf("  --   %-2s %-9s: %5.2f%% of one core, %6.1f us/block\n",
+                   names[m], st.name, frac * 100.0, per_block_us);
             /* The SPI callback budget is ~900 us for EVERYTHING in the chain. */
-            ok(per_block_us < 400.0, "%s stays under 400 us per block", names[m]);
+            if (st.bands == 4)
+                ok(per_block_us < 400.0, "%s worst case stays under 400 us per block", names[m]);
             api->destroy_instance(ti);
+          }
         }
     }
 
