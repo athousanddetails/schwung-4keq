@@ -551,33 +551,43 @@ static int fkq_get_param(void *instance, const char *key, char *buf, int buf_len
         char *o = inst->chain_buf;
         const size_t cap = sizeof inst->chain_buf;
         size_t w = (size_t)snprintf(o, cap, "{\"modes\":null,\"levels\":{");
-        /* LF is root. It is the first band, and a root that is itself a band
-         * keeps every page the same kind of thing — no "Main" page that is
-         * really a summary of five others. */
+        /* MASTER is the root level, and that is not a preference.
+         *
+         * Schwung names the walk root's grid page "Main" whatever the level
+         * calls itself — deliberately and fleet-wide, so every module opens on
+         * a page with the same name (page_plan.mjs, emitLevel). Whichever
+         * level is root therefore CANNOT be called LF. Putting the four bands
+         * BELOW a master root is what lets each of them keep its own name.
+         *
+         * Both alternatives were rendered before choosing this one: LF at root
+         * showed as "Main", and a nav-only root prefixed every sibling as
+         * "LF/LMF", "LF/HMF" and so on. So you land on the channel's own
+         * controls and page into the bands, each of which says which band it
+         * is. */
         w += (size_t)snprintf(o + w, cap - w,
-            "\"root\":{\"name\":\"LF\",\"children\":null,\"knobs\":[");
-        for (int i = 0; i < 5; i++)
+            "\"root\":{\"name\":\"MASTER\",\"children\":null,\"knobs\":[");
+        for (int i = 0; i < 6; i++)
             w += (size_t)snprintf(o + w, cap - w, "%s\"%s\"", i ? "," : "",
-                                  fkq_knobs_lf[i]);
+                                  fkq_knobs_master[i]);
         w += (size_t)snprintf(o + w, cap - w, "],\"params\":[");
-        for (int i = 0; i < 5; i++) {
-            const int idx = fkq_param_index(fkq_knobs_lf[i]);
+        for (int i = 0; i < 6; i++) {
+            const int idx = fkq_param_index(fkq_knobs_master[i]);
             if (idx < 0) continue;
             w += (size_t)snprintf(o + w, cap - w, "%s{\"key\":\"%s\",\"label\":\"%s\"}",
                                   i ? "," : "", fkq_params[idx].key, fkq_params[idx].name);
         }
         w += (size_t)snprintf(o + w, cap - w,
+            ",{\"level\":\"lf\",\"label\":\"LF\"}"
             ",{\"level\":\"lmf\",\"label\":\"LMF\"}"
             ",{\"level\":\"hmf\",\"label\":\"HMF\"}"
             ",{\"level\":\"hf\",\"label\":\"HF\"}"
-            ",{\"level\":\"master\",\"label\":\"MASTER\"}"
             ",{\"level\":\"presets\",\"label\":\"PRESET\"}]},");
         if (w >= cap - 2) return -1;
 
+        w = fkq_write_level(o, cap, w, "lf",  "LF",  fkq_knobs_lf,  5, false);
         w = fkq_write_level(o, cap, w, "lmf", "LMF", fkq_knobs_lmf, 3, false);
         w = fkq_write_level(o, cap, w, "hmf", "HMF", fkq_knobs_hmf, 3, false);
-        w = fkq_write_level(o, cap, w, "hf", "HF", fkq_knobs_hf, 5, false);
-        w = fkq_write_level(o, cap, w, "master", "MASTER", fkq_knobs_master, 6, false);
+        w = fkq_write_level(o, cap, w, "hf",  "HF",  fkq_knobs_hf,  5, false);
         /* Preset browser. list_param / count_param / name_param get their own
          * page kind; deliberately no "knobs" here — a selector listed as a
          * knob is ignored by the planner and would be dead travel anyway. */

@@ -265,7 +265,7 @@ int main(int argc, char **argv)
      * own controls live on it — a hierarchy that merely parses can still put
      * a control on the wrong page, which is the mistake worth catching. */
     {
-        static const char *const kLevels[] = { "root", "lmf", "hmf", "hf", "master", "presets" };
+        static const char *const kLevels[] = { "root", "lf", "lmf", "hmf", "hf", "presets" };
         for (const char *lv : kLevels) {
             const std::string pat = std::string("\"") + lv + "\":{";
             ok(uh.find(pat) != std::string::npos, "ui_hierarchy has level %s", lv);
