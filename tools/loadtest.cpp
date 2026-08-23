@@ -454,17 +454,10 @@ int main(int argc, char **argv)
         }
     }
 
-    printf("\n== response curve ==\n");
+    printf("\n== the snapshot a remote panel reads ==\n");
     {
         void *ti = api->create_instance(".", nullptr);
-        const int pts = atoi(get(api, ti, "curve_points").c_str());
-        ok(pts == 64, "curve_points is 64");
-        const std::string flat = get(api, ti, "curve");
-        int commas = 0;
-        for (char c : flat) if (c == ',') commas++;
-        ok(commas == pts - 1, "curve has %d points", pts);
         set(api, ti, "lf_gain", "12");
-        ok(get(api, ti, "curve") != flat, "curve follows a parameter change");
 
         /* THE READOUTS MUST BE IN THE STATE BLOB.
          *
@@ -479,7 +472,7 @@ int main(int argc, char **argv)
            "state blob is complete JSON (%d bytes, not truncated)", (int)blob.size());
         static const char *const kMustBeInState[] = {
             "in_peak_l", "in_peak_r", "out_peak_l", "out_peak_r", "clip",
-            "lf_hz", "lm_hz", "hm_hz", "hf_hz", "curve", "curve_points",
+            "build",
         };
         int missing = 0;
         for (const char *k : kMustBeInState) {
@@ -539,37 +532,6 @@ int main(int argc, char **argv)
         ok(get(api, b, "hpf_freq") == "250", "restored dial is 250");
         ok(get(api, b, "hpf_enabled") == "Off", "restored enable stayed Off");
         api->destroy_instance(a); api->destroy_instance(b);
-    }
-
-    printf("\n== calibrated band centres ==\n");
-    {
-        /* These drive the panel's draggable handles. The control coordinate
-         * and the audible centre are NOT the same number, which is the whole
-         * reason the plugin serves this rather than the panel computing it —
-         * so check they actually differ, or the readout is not doing its
-         * job and a JS copy would have "worked" too. */
-        void *ti = api->create_instance(".", nullptr);
-        struct { const char *hz; const char *freq; const char *gain; } b[4] = {
-            { "lf_hz", "lf_freq", "lf_gain" }, { "lm_hz", "lm_freq", "lm_gain" },
-            { "hm_hz", "hm_freq", "hm_gain" }, { "hf_hz", "hf_freq", "hf_gain" },
-        };
-        for (int i = 0; i < 4; i++) {
-            set(api, ti, b[i].gain, "6");
-            const double control = atof(get(api, ti, b[i].freq).c_str());
-            const double audible = atof(get(api, ti, b[i].hz).c_str());
-            ok(audible > 10.0 && audible < 25000.0,
-               "%-6s = %8.1f Hz (control %.0f)", b[i].hz, audible, control);
-        }
-        /* moving the dial must move the reported centre */
-        const double before = atof(get(api, ti, "hm_hz").c_str());
-        set(api, ti, "hm_freq", "7000");
-        const double after = atof(get(api, ti, "hm_hz").c_str());
-        ok(after > before, "hm_hz follows hm_freq (%.0f -> %.0f Hz)", before, after);
-        /* and the voicing changes the calibration */
-        set(api, ti, "eq_type", "Black");
-        ok(atof(get(api, ti, "hm_hz").c_str()) != after,
-           "hm_hz differs between Brown and Black");
-        api->destroy_instance(ti);
     }
 
     api->destroy_instance(inst);

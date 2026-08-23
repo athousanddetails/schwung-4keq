@@ -28,7 +28,7 @@ footer a{color:#9aa0ab}
   <select id="slotSel" style="display:none"></select>
   <span id="conn">connecting…</span>
 </div>
-<div id="wrap"><canvas id="cv" width="1920" height="1280"></canvas></div>
+<div id="wrap"><canvas id="cv" width="1920" height="1032"></canvas></div>
 <footer>
   DSP: <a href="https://github.com/dusk-audio/dusk-audio-plugins" target="_blank"
   rel="noreferrer">4K EQ 2 — Dusk Audio</a>, GPL-3.0, vendored unmodified ·
@@ -49,18 +49,17 @@ footer a{color:#9aa0ab}
  * printed stepped dial legends. Geometry and palette are read from upstream's
  * FourKEQUI.cpp so the two agree.
  *
- * The response curve is NOT computed here — the plugin serves it from the same
- * designCurve() its audio path uses, so the drawing cannot disagree with what
- * you are hearing, and the measured calibration stays in one place.
+ * There is deliberately NO response curve. It was drawn here and removed:
+ * the band markers used a different colour per band from the knob caps beside
+ * them, so the picture disagreed with the controls it was describing. A
+ * wrong picture is worse than none. The knobs are the interface.
  */
 
 /* ---------- design space + palette (upstream FourKEQUI.cpp) ---------- */
-var DW=960, DH=640, DPR=2;
+var DW=960, DH=516, DPR=2;   /* 516 = upstream's graph-hidden height */
 var COL=[40,186,331,477,622,768,920];
-var GX0=9, GY0=58, GX1=951, GY1=174;      /* response graph frame */
-var DB_RANGE=20, F_MIN=20, F_MAX=20000;
 var INX0=8, INX1=34, OUTX0=926, OUTX1=952, MET_Y0=246, MET_Y1=656, MET_LBL_Y=228;
-var CTL_TOP=182, CTL_BOT=634;             /* design 220..662 maps here */
+var CTL_TOP=58, CTL_BOT=510;              /* design 220..662 maps here */
 
 var C={
   chassis:"rgb(30,30,33)", panel:"rgb(34,34,37)", panelDk:"rgb(24,24,26)",
@@ -102,13 +101,19 @@ function num(k,d){
   var r=raw(k); if(r==="")return d;
   var m=meta(k);
   if(m.options){var i=m.options.indexOf(r);if(i>=0)return i;}
-  /* An option name that is not a plain number must never fall through to
-   * parseFloat: "2x" parses as 2 and silently selects a different option,
-   * and "On" parses as NaN. That happens for real in the window before
-   * chain_params arrives, when meta() knows no options yet. */
+  /* Accept anything that is WHOLLY a number, and nothing else.
+   *
+   * The point is still to stop an option name reaching parseFloat — "2x"
+   * parses as 2 and silently selects a different option, "On" as NaN. But
+   * the previous guard tested String(parseFloat(r))===r, which also rejects
+   * every value this panel itself sends: send() writes v.toFixed(3), so
+   * "7.800" parsed to 7.8, failed the round trip, and fell back to the
+   * DEFAULT — every drag snapped its knob to zero mid-gesture. Test the
+   * shape of the string instead of its round trip. */
+  if(!/^[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?$/.test(r.trim()))
+    return d;
   var f=parseFloat(r);
-  if(isNaN(f)||String(f)!==r.trim())return d;
-  return f;
+  return isNaN(f)?d:f;
 }
 function send(k,v){
   values[key(k)]=String(v);
@@ -246,52 +251,6 @@ function paint(){
   panelBtn("oversampling",570,12,614,36,"OS "+(osOpts[num("oversampling",1)]||"2x"),false);
   panelBtn("auto_gain2",622,12,700,36,"AUTO GAIN",num("auto_gain",0)>0.5);
 
-  /* ---- response graph ---- */
-  rr(GX0,GY0,GX1,GY1,3,C.panelDk,"rgb(58,58,62)",1);
-  ctx.save();
-  ctx.beginPath();ctx.rect(GX0+1,GY0+1,GX1-GX0-2,GY1-GY0-2);ctx.clip();
-  var gw=GX1-GX0, gh=GY1-GY0;
-  function gx(f){return GX0+gw*Math.log(f/F_MIN)/Math.log(F_MAX/F_MIN);}
-  function gy(db){return GY0+gh*(0.5-db/(2*DB_RANGE));}
-  ctx.strokeStyle="rgb(46,46,50)";ctx.lineWidth=1;
-  [30,50,100,200,500,1000,2000,5000,10000].forEach(function(f){
-    ctx.beginPath();ctx.moveTo(gx(f),GY0);ctx.lineTo(gx(f),GY1);ctx.stroke();
-    txt(f>=1000?(f/1000)+"k":String(f),gx(f)+3,GY1-8,8.5,"rgb(96,98,103)","left");
-  });
-  [-15,-10,-5,5,10,15].forEach(function(d){
-    ctx.beginPath();ctx.moveTo(GX0,gy(d));ctx.lineTo(GX1,gy(d));ctx.stroke();
-  });
-  ctx.strokeStyle="rgb(74,74,80)";ctx.lineWidth=1.2;
-  ctx.beginPath();ctx.moveTo(GX0,gy(0));ctx.lineTo(GX1,gy(0));ctx.stroke();
-  txt("+20",GX1-4,gy(18),8.5,"rgb(96,98,103)","right");
-  txt("-20",GX1-4,gy(-18),8.5,"rgb(96,98,103)","right");
-
-  var pts=raw("curve").split(",");
-  if(pts.length>4){
-    var accent=black?"rgb(150,158,172)":"rgb(198,150,86)";
-    ctx.beginPath();
-    for(var i=0;i<pts.length;i++){
-      var f=F_MIN*Math.pow(F_MAX/F_MIN,i/(pts.length-1)),v=parseFloat(pts[i]);
-      if(isNaN(v))continue;
-      i?ctx.lineTo(gx(f),gy(v)):ctx.moveTo(gx(f),gy(v));
-    }
-    ctx.strokeStyle=accent;ctx.lineWidth=2;ctx.stroke();
-    ctx.lineTo(GX1,gy(0));ctx.lineTo(GX0,gy(0));ctx.closePath();
-    ctx.globalAlpha=0.13;ctx.fillStyle=accent;ctx.fill();ctx.globalAlpha=1;
-  }else{
-    txt("waiting for the plugin…",(GX0+GX1)/2,(GY0+GY1)/2,12,"rgb(110,112,118)");
-  }
-  /* band markers in the console's own curve colours */
-  [["lf_hz","lf_gain",C.cLF],["lm_hz","lm_gain",C.cLMF],
-   ["hm_hz","hm_gain",C.cHMF],["hf_hz","hf_gain",C.cHF]].forEach(function(b){
-    var hz=num(b[0],0);if(hz<=0)return;
-    var x=gx(hz),y=gy(num(b[1],0));
-    ctx.beginPath();ctx.arc(x,y,4,0,6.2832);
-    ctx.fillStyle=b[2];ctx.fill();
-    ctx.strokeStyle="rgba(0,0,0,0.55)";ctx.lineWidth=1.2;ctx.stroke();
-  });
-  ctx.restore();
-
   /* ---- control panel ---- */
   rr(COL[0],cY(220),COL[6],cY(662),4,C.panel,null);
   var names=["FILTERS","LF","LMF","HMF","HF","MASTER"];
@@ -383,7 +342,12 @@ cv.addEventListener("pointerdown",function(e){
       var dx=p.x-h.x,dy=p.y-h.y;
       if(dx*dx+dy*dy<=h.r*h.r){
         drag={id:h.id,y0:e.clientY,v0:num(h.id,0)};
-        cv.setPointerCapture(e.pointerId);e.preventDefault();return;
+        /* Capture is an optimisation — it keeps the gesture alive when the
+         * pointer leaves the canvas. It throws for a pointerId the browser
+         * does not consider active, and an exception here would abort the
+         * handler with the drag half-started, so it must not be load-bearing. */
+        try{cv.setPointerCapture(e.pointerId);}catch(err){}
+        e.preventDefault();return;
       }
     }
   }
@@ -442,7 +406,15 @@ function applyChainParams(list){
   });
   paint();
 }
-function onParams(p){for(var k in p)values[k]=p[k];paint();}
+/* While a knob is held, the value under the hand is the truth.
+ *
+ * The device echoes what it has, and that echo is a round-trip behind the
+ * gesture. Letting it land mid-drag makes the knob step backwards between
+ * moves. Drop updates for the key being dragged; everything else flows. */
+function onParams(p){
+  for(var k in p){ if(drag&&k===key(drag.id))continue; values[k]=p[k]; }
+  paint();
+}
 
 /* The shim is loaded by the tag above, so it is present by the time this
  * runs. Keep the guard anyway: if the asset ever fails to load, fall through

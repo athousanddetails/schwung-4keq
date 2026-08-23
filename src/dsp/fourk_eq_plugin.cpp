@@ -12,8 +12,8 @@
  * Realtime rules: process_block never allocates, never logs, never touches
  * the filesystem. set_param and get_param run on the SAME SPI callback and
  * are held to the same rule; the one expensive thing either of them can do —
- * designing the response curve for the remote panel — is cached behind a
- * dirty flag so a poll costs a memcpy rather than a redesign.
+ * held to the same rule. The panel draws no response curve, so neither
+ * builds one: the snapshot is values only.
  */
 
 #include <atomic>
@@ -63,12 +63,6 @@ static void fkq_log(const char *msg)
  * readout, so there is no reason to abbreviate them. */
 #define FKQ_PRESET_COUNT (kNumFactoryPresets + 1)
 
-/* Response curve served to the remote panel. 128 points is one per column of
- * the Move's 128px display and plenty for a browser canvas. */
-#define FKQ_CURVE_POINTS 64
-#define FKQ_CURVE_F_LO   20.0f
-#define FKQ_CURVE_F_HI   20000.0f
-
 struct fkq_instance {
     duskaudio::FourKEQDSP dsp;
     std::atomic<float> values[FKQ_PARAM_COUNT];
@@ -86,16 +80,13 @@ struct fkq_instance {
      * than the module quietly limiting on the user's behalf. */
     std::atomic<int> clip_count { 0 };
 
-    /* Curve cache. Rebuilt only when an EQ parameter moves. */
-    std::atomic<bool> curve_dirty { true };
-    char curve_buf[FKQ_CURVE_POINTS * 8 + 16];
-
     /* serve buffers (control thread only) */
     char chain_buf[8192];
-    /* Sized for the 22 params plus the readouts, the curve included. The
-     * curve alone is ~64*6 bytes, so the old 1 KB silently truncated the blob
-     * and get_param returned -1 — which reads to a UI as "no values at all". */
-    char state_buf[3072];
+    /* The 22 params, the build id and the meters. Kept well clear of the
+     * edge: a snapshot that fills its buffer truncates mid-token, and
+     * schwung-manager drops the whole thing as invalid JSON — which reads to
+     * a panel as "no values at all" rather than as an error. */
+    char state_buf[1536];
 };
 
 static float fkq_clamp(const fkq_param_t *p, float v)
@@ -152,7 +143,6 @@ static void fkq_set_index(fkq_instance *inst, int idx, float v)
     v = fkq_clamp(&fkq_params[idx], v);
     inst->values[idx].store(v, std::memory_order_relaxed);
     fkq_push(inst, idx, v);
-    inst->curve_dirty.store(true, std::memory_order_relaxed);
 }
 
 /* Upstream ParamId -> our table index. Every id the preset runtime emits is
@@ -524,58 +514,6 @@ static size_t fkq_write_level(char *o, size_t cap, size_t w,
     return w;
 }
 
-/* Rebuild the cached response curve if a parameter has moved since the last
- * read. designCurve() itself is under a microsecond; the 128-point sweep is
- * the cost, which is why it is not paid per poll. */
-static void fkq_refresh_curve(fkq_instance *inst)
-{
-    if (!inst->curve_dirty.exchange(false, std::memory_order_relaxed))
-        return;
-
-    duskaudio::FourKEQDSP::CurveControls c;
-    c.baseSampleRate = g_host ? (double)g_host->sample_rate : (double)MOVE_SAMPLE_RATE;
-    c.oversampling = inst->values[FKQ_P_OVERSAMPLING].load(std::memory_order_relaxed);
-    c.black        = inst->values[FKQ_P_EQ_TYPE].load(std::memory_order_relaxed) > 0.5f;
-    c.hpfEnabled   = inst->values[FKQ_P_HPF_ENABLED].load(std::memory_order_relaxed) > 0.5f;
-    c.lpfEnabled   = inst->values[FKQ_P_LPF_ENABLED].load(std::memory_order_relaxed) > 0.5f;
-    c.hpfFreq      = inst->values[FKQ_P_HPF_FREQ].load(std::memory_order_relaxed);
-    c.lpfFreq      = inst->values[FKQ_P_LPF_FREQ].load(std::memory_order_relaxed);
-    c.lfGain       = inst->values[FKQ_P_LF_GAIN].load(std::memory_order_relaxed);
-    c.lfFreq       = inst->values[FKQ_P_LF_FREQ].load(std::memory_order_relaxed);
-    c.lfBell       = inst->values[FKQ_P_LF_BELL].load(std::memory_order_relaxed);
-    c.lmGain       = inst->values[FKQ_P_LM_GAIN].load(std::memory_order_relaxed);
-    c.lmFreq       = inst->values[FKQ_P_LM_FREQ].load(std::memory_order_relaxed);
-    c.lmQ          = inst->values[FKQ_P_LM_Q].load(std::memory_order_relaxed);
-    c.hmGain       = inst->values[FKQ_P_HM_GAIN].load(std::memory_order_relaxed);
-    c.hmFreq       = inst->values[FKQ_P_HM_FREQ].load(std::memory_order_relaxed);
-    c.hmQ          = inst->values[FKQ_P_HM_Q].load(std::memory_order_relaxed);
-    c.hfGain       = inst->values[FKQ_P_HF_GAIN].load(std::memory_order_relaxed);
-    c.hfFreq       = inst->values[FKQ_P_HF_FREQ].load(std::memory_order_relaxed);
-    c.hfBell       = inst->values[FKQ_P_HF_BELL].load(std::memory_order_relaxed);
-    /* Upstream's default, not a knob here — but designCurve() must be told
-     * the same value processBlock() runs at or the drawn curve is not the
-     * one you are hearing. */
-    c.saturation   = kFourKParams[kSaturation].def;
-
-    const duskaudio::FourKEQDSP::CurveCoeffs d =
-        duskaudio::FourKEQDSP::designCurve(c);
-
-    const float ratio = FKQ_CURVE_F_HI / FKQ_CURVE_F_LO;
-    char *o = inst->curve_buf;
-    const size_t cap = sizeof inst->curve_buf;
-    size_t w = 0;
-    for (int i = 0; i < FKQ_CURVE_POINTS; i++) {
-        const float f = FKQ_CURVE_F_LO *
-            std::pow(ratio, (float)i / (float)(FKQ_CURVE_POINTS - 1));
-        w += (size_t)snprintf(o + w, cap - w, "%s%.2f", i ? "," : "",
-                              (double)duskaudio::FourKEQDSP::curveDbAt(d, f));
-        if (w >= cap - 12) break;
-    }
-    o[w < cap ? w : cap - 1] = 0;
-}
-
-static void fkq_refresh_curve(fkq_instance *inst);
-
 static int fkq_get_param(void *instance, const char *key, char *buf, int buf_len)
 {
     auto *inst = (fkq_instance *)instance;
@@ -667,8 +605,8 @@ static int fkq_get_param(void *instance, const char *key, char *buf, int buf_len
          * says "sent via 'state'". It does NOT walk chain_params. So a key the
          * plugin merely serves from get_param never reaches a remote panel at
          * all, however it is declared. That is why the meters, the clip flag,
-         * the band centres and the curve all read back undefined in the
-         * browser while working perfectly against a local test harness.
+         * the meters and the clip flag read back undefined in the browser
+         * while working perfectly against a local test harness.
          *
          * Safe to carry: the restore path looks each key up in fkq_params and
          * ignores what it cannot find, so these are written on save and
@@ -680,30 +618,6 @@ static int fkq_get_param(void *instance, const char *key, char *buf, int buf_len
             (double)inst->dsp.getInputPeakL(), (double)inst->dsp.getInputPeakR(),
             (double)inst->dsp.getOutputPeakL(), (double)inst->dsp.getOutputPeakR(),
             inst->clip_count.exchange(0, std::memory_order_relaxed));
-        {
-            using FK = duskaudio::FourKEQDSP;
-            const bool black = inst->values[FKQ_P_EQ_TYPE].load(std::memory_order_relaxed) > 0.5f;
-            const struct { const char *k; int fi, gi, bi; FK::Band band; } bands[4] = {
-                { "lf_hz", FKQ_P_LF_FREQ, FKQ_P_LF_GAIN, FKQ_P_LF_BELL, FK::Band::LF },
-                { "lm_hz", FKQ_P_LM_FREQ, FKQ_P_LM_GAIN, -1,            FK::Band::LM },
-                { "hm_hz", FKQ_P_HM_FREQ, FKQ_P_HM_GAIN, -1,            FK::Band::HM },
-                { "hf_hz", FKQ_P_HF_FREQ, FKQ_P_HF_GAIN, FKQ_P_HF_BELL, FK::Band::HF },
-            };
-            for (int i = 0; i < 4; i++) {
-                const bool bell = bands[i].bi < 0
-                    ? true
-                    : inst->values[bands[i].bi].load(std::memory_order_relaxed) > 0.5f;
-                w += (size_t)snprintf(o + w, cap - w, ",\"%s\":%.1f", bands[i].k,
-                    (double)FK::calibratedEqFrequency(
-                        inst->values[bands[i].fi].load(std::memory_order_relaxed),
-                        inst->values[bands[i].gi].load(std::memory_order_relaxed),
-                        bands[i].band, black, bell));
-            }
-        }
-        if (w >= cap - 8) return -1;
-        fkq_refresh_curve(inst);
-        w += (size_t)snprintf(o + w, cap - w, ",\"curve\":\"%s\",\"curve_points\":%d",
-                              inst->curve_buf, FKQ_CURVE_POINTS);
         if (w >= cap - 8) return -1;
         w += (size_t)snprintf(o + w, cap - w, "}");
         return fkq_write_str(buf, buf_len, o);
@@ -733,40 +647,6 @@ static int fkq_get_param(void *instance, const char *key, char *buf, int buf_len
     /* Latency the oversampler is currently adding, in base-rate samples. */
     if (!strcmp(key, "latency"))
         return snprintf(buf, buf_len, "%d", inst->dsp.getLatencySamples());
-
-    /* Calibrated audible centre of each band, in Hz — see fourk_readouts. */
-    {
-        using FK = duskaudio::FourKEQDSP;
-        const bool black = inst->values[FKQ_P_EQ_TYPE].load(std::memory_order_relaxed) > 0.5f;
-        struct { const char *k; int fi, gi, bi; FK::Band band; } bands[4] = {
-            { "lf_hz", FKQ_P_LF_FREQ, FKQ_P_LF_GAIN, FKQ_P_LF_BELL, FK::Band::LF },
-            { "lm_hz", FKQ_P_LM_FREQ, FKQ_P_LM_GAIN, -1,            FK::Band::LM },
-            { "hm_hz", FKQ_P_HM_FREQ, FKQ_P_HM_GAIN, -1,            FK::Band::HM },
-            { "hf_hz", FKQ_P_HF_FREQ, FKQ_P_HF_GAIN, FKQ_P_HF_BELL, FK::Band::HF },
-        };
-        for (int i = 0; i < 4; i++) {
-            if (strcmp(key, bands[i].k)) continue;
-            /* The mid bands are always bell; only LF and HF have the switch. */
-            const bool bell = bands[i].bi < 0
-                ? true
-                : inst->values[bands[i].bi].load(std::memory_order_relaxed) > 0.5f;
-            const float hz = FK::calibratedEqFrequency(
-                inst->values[bands[i].fi].load(std::memory_order_relaxed),
-                inst->values[bands[i].gi].load(std::memory_order_relaxed),
-                bands[i].band, black, bell);
-            return snprintf(buf, buf_len, "%.1f", (double)hz);
-        }
-    }
-
-    /* The drawn response, dB at FKQ_CURVE_POINTS log-spaced points from
-     * 20 Hz to 20 kHz. Computed by the DSP's own designCurve(), so the panel
-     * cannot draw a curve the audio path disagrees with. */
-    if (!strcmp(key, "curve")) {
-        fkq_refresh_curve(inst);
-        return fkq_write_str(buf, buf_len, inst->curve_buf);
-    }
-    if (!strcmp(key, "curve_points"))
-        return snprintf(buf, buf_len, "%d", FKQ_CURVE_POINTS);
 
     const int idx = fkq_param_index(key);
     if (idx < 0) return -1;

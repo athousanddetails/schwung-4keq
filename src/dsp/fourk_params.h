@@ -248,20 +248,6 @@ static const fkq_readout_t fkq_readouts[] = {
     { "out_peak_l", "float"  },
     { "out_peak_r", "float"  },
     { "clip",       "int"    },
-    { "curve",      "string" },
-    /* Each band's CALIBRATED audible centre, in Hz.
-     *
-     * The panel needs these to put a draggable handle where the band
-     * actually is. It cannot work them out: *_freq carries a dial-marking
-     * control coordinate, and the control -> audible mapping is a measured
-     * anchor table living in the C++. Serving the answer keeps the
-     * calibration in one place instead of growing a JavaScript copy that
-     * drifts. Dragging still writes the control coordinate; the device
-     * corrects the drawn position on the next update. */
-    { "lf_hz",      "float"  },
-    { "lm_hz",      "float"  },
-    { "hm_hz",      "float"  },
-    { "hf_hz",      "float"  },
 };
 #define FKQ_READOUT_COUNT ((int)(sizeof fkq_readouts / sizeof fkq_readouts[0]))
 

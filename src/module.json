@@ -286,36 +286,6 @@
     "name": "clip",
     "type": "int",
     "access": "read"
-   },
-   {
-    "key": "curve",
-    "name": "curve",
-    "type": "string",
-    "access": "read"
-   },
-   {
-    "key": "lf_hz",
-    "name": "lf_hz",
-    "type": "float",
-    "access": "read"
-   },
-   {
-    "key": "lm_hz",
-    "name": "lm_hz",
-    "type": "float",
-    "access": "read"
-   },
-   {
-    "key": "hm_hz",
-    "name": "hm_hz",
-    "type": "float",
-    "access": "read"
-   },
-   {
-    "key": "hf_hz",
-    "name": "hf_hz",
-    "type": "float",
-    "access": "read"
    }
   ]
  }
