@@ -458,13 +458,38 @@ int main(int argc, char **argv)
     {
         void *ti = api->create_instance(".", nullptr);
         const int pts = atoi(get(api, ti, "curve_points").c_str());
-        ok(pts == 128, "curve_points is 128");
+        ok(pts == 64, "curve_points is 64");
         const std::string flat = get(api, ti, "curve");
         int commas = 0;
         for (char c : flat) if (c == ',') commas++;
         ok(commas == pts - 1, "curve has %d points", pts);
         set(api, ti, "lf_gain", "12");
         ok(get(api, ti, "curve") != flat, "curve follows a parameter change");
+
+        /* THE READOUTS MUST BE IN THE STATE BLOB.
+         *
+         * schwung-manager pushes values to a browser by reading "<comp>:state"
+         * (fetchAllParams), never by walking chain_params. A readout the plugin
+         * only serves from get_param is therefore invisible to a remote panel —
+         * which is exactly how the meters, the clip flag, the band centres and
+         * the curve all arrived as `undefined` in the browser while every local
+         * test passed. Declaring them in chain_params was not enough. */
+        const std::string blob = get(api, ti, "state");
+        ok(!blob.empty() && blob[0] == '{' && blob[blob.size()-1] == '}',
+           "state blob is complete JSON (%d bytes, not truncated)", (int)blob.size());
+        static const char *const kMustBeInState[] = {
+            "in_peak_l", "in_peak_r", "out_peak_l", "out_peak_r", "clip",
+            "lf_hz", "lm_hz", "hm_hz", "hf_hz", "curve", "curve_points",
+        };
+        int missing = 0;
+        for (const char *k : kMustBeInState) {
+            const std::string pat = std::string("\"") + k + "\":";
+            if (blob.find(pat) == std::string::npos) {
+                printf("       state blob omits %s — a remote panel cannot see it\n", k);
+                missing++;
+            }
+        }
+        ok(missing == 0, "state blob carries every readout the panel needs");
         api->destroy_instance(ti);
     }
 

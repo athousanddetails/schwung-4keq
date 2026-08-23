@@ -3,21 +3,42 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>4K EQ</title>
 <style>
-html,body{margin:0;background:#1a1a1c;height:100%}
-body{display:flex;align-items:center;justify-content:center;
-     font:13px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#e4e4e0}
-#wrap{width:100%;max-width:1200px;padding:8px}
+/* Natural document flow, deliberately. schwung-remote-api.js measures
+ * documentElement and posts a "height" to the parent so the iframe can size
+ * itself; with html,body at height:100% and the body flex-centred, that
+ * measurement can only ever equal the frame it is already in, so the panel
+ * stayed cropped at the top and there was nothing to scroll to. */
+html,body{margin:0;background:#1a1a1c}
+body{font:13px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+     color:#e4e4e0;padding:10px}
+#wrap{max-width:1200px;margin:0 auto}
 canvas{display:block;width:100%;height:auto;touch-action:none;border-radius:5px}
-#conn{position:fixed;top:6px;right:10px;font-size:11px;color:#8b8f9a;
-      border:1px solid #2c2f38;border-radius:3px;padding:2px 7px;background:#111}
+.bar{display:flex;align-items:center;gap:8px;margin:0 auto 8px;max-width:1200px;
+     font-size:11px;color:#8b8f9a}
+#conn{margin-left:auto;border:1px solid #2c2f38;border-radius:3px;padding:2px 7px}
 #conn.ok{color:#7fb069;border-color:#33502c}
 #conn.err{color:#d2603c;border-color:#4a2b22}
-#slotSel{position:fixed;top:6px;left:10px;background:#1d1f25;color:#e4e4e0;
-         border:1px solid #2c2f38;border-radius:3px;padding:2px 6px;font:inherit;font-size:11px}
+#slotSel{background:#1d1f25;color:#e4e4e0;border:1px solid #2c2f38;
+         border-radius:3px;padding:2px 6px;font:inherit;font-size:11px}
+footer{max-width:1200px;margin:8px auto 0;font-size:10.5px;color:#7b7f88;
+       line-height:1.5}
+footer a{color:#9aa0ab}
 </style></head><body>
-<select id="slotSel" style="display:none"></select>
-<span id="conn">connecting…</span>
+<div class="bar">
+  <select id="slotSel" style="display:none"></select>
+  <span id="conn">connecting…</span>
+</div>
 <div id="wrap"><canvas id="cv" width="1920" height="1280"></canvas></div>
+<footer>
+  DSP: <a href="https://github.com/dusk-audio/dusk-audio-plugins" target="_blank"
+  rel="noreferrer">4K EQ 2 — Dusk Audio</a>, GPL-3.0, vendored unmodified ·
+  Move port by athousanddetails
+</footer>
+<!-- Provides window.schwungRemote (postMessage bridge to the manager) AND
+     reports this page's height so the parent can size the iframe. Without it
+     the panel falls back to a direct WebSocket, subscribes to whichever slot
+     it guessed, and reports "not in this track". -->
+<script src="/static/schwung-remote-api.js"></script>
 <script>
 (function(){
 "use strict";
@@ -423,6 +444,9 @@ function applyChainParams(list){
 }
 function onParams(p){for(var k in p)values[k]=p[k];paint();}
 
+/* The shim is loaded by the tag above, so it is present by the time this
+ * runs. Keep the guard anyway: if the asset ever fails to load, fall through
+ * to the direct WebSocket rather than showing a dead panel. */
 if(window.parent!==window&&window.schwungRemote){
   bridge=window.schwungRemote;
   comp=window.schwungRemote.component
@@ -432,8 +456,15 @@ if(window.parent!==window&&window.schwungRemote){
   bridge.getChainParams().then(applyChainParams);
 }else{
   var sel=document.getElementById("slotSel");sel.style.display="";
+  /* "Pop out ↗" opens this page with schwungStandalone=1&slot=N. Honour it,
+   * or a popped-out panel subscribes to slot 0 and reports the module is not
+   * in the track you opened it from. */
+  var qs=new URLSearchParams(location.search);
+  var qSlot=parseInt(qs.get("slot"),10);
+  if(!isNaN(qSlot))slot=qSlot;
   for(var i=0;i<4;i++){var o=document.createElement("option");
-    o.value=String(i);o.textContent="Track "+(i+1);sel.appendChild(o);}
+    o.value=String(i);o.textContent="Track "+(i+1);
+    if(i===slot)o.selected=true;sel.appendChild(o);}
   sel.onchange=function(){slot=parseInt(sel.value,10);values={};subscribe();};
   var subscribe=function(){
     if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:"subscribe",slot:slot}));};

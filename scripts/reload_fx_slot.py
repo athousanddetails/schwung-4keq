@@ -54,6 +54,9 @@ def main():
     slot = int(sys.argv[2]) if len(sys.argv) > 2 else 0
     fxpos = int(sys.argv[3]) if len(sys.argv) > 3 else 1
     module = sys.argv[4] if len(sys.argv) > 4 else "4k-eq"
+    # Optional 5th arg: the build id expected of the running instance, read
+    # out of the freshly built .so by deploy.sh.
+    expect_build = sys.argv[5] if len(sys.argv) > 5 else None
 
     if fxpos < 1:
         print("reload: fx position is one-based; got %d" % fxpos)
@@ -88,6 +91,17 @@ def main():
 
     send(sock, {"type": "subscribe", "slot": slot})
     time.sleep(0.3)
+
+    # CLEAR FIRST, then set. Writing the module id that is already there is a
+    # no-op: the chain host sees no change and keeps the OLD INODE mapped, so
+    # the slot goes on running the previous build while everything downstream
+    # reports success. That is not hypothetical — it is how a rebuilt module
+    # with new state fields kept serving the old snapshot, with an on-device
+    # loadtest passing (it dlopens the file itself) and slot_info happily
+    # confirming "4k-eq" the whole time. Unloading forces the reload.
+    send(sock, {"type": "set_param", "slot": slot,
+                "key": "fx%d:module" % fxpos, "value": ""})
+    time.sleep(1.0)
     send(sock, {"type": "set_param", "slot": slot,
                 "key": "fx%d:module" % fxpos, "value": module})
     time.sleep(1.5)
@@ -103,6 +117,7 @@ def main():
     # actually in the slot.
     send(sock, {"type": "subscribe", "slot": slot})
     loaded = None
+    running_build = None
     deadline = time.time() + 5.0
     sock.settimeout(5)
     buf = b""
@@ -133,11 +148,31 @@ def main():
                 continue
             if msg.get("type") == "slot_info":
                 loaded = msg.get("fx%d" % fxpos)
+            elif msg.get("type") == "param_update":
+                v = (msg.get("params") or {}).get("fx%d:build" % fxpos)
+                if v:
+                    running_build = v
     sock.close()
 
+    # slot_info only proves the module ID, which does not change across a
+    # rebuild — it confirmed "4k-eq" while the slot ran a build two versions
+    # old. Compare the BUILD the running instance reports.
+    if expect_build and running_build and running_build != expect_build:
+        print("reload: slot %d fx%d is running a STALE build" % (slot, fxpos))
+        print("        running: %s" % running_build)
+        print("        on disk: %s" % expect_build)
+        print("        The chain host kept the old inode mapped. Re-pick the")
+        print("        effect in the FX slot on the device to force a reload.")
+        return 1
+    if expect_build and not running_build:
+        print("reload: slot %d fx%d did not report a build id — cannot prove "
+              "which code is running" % (slot, fxpos))
+        return 1
+
     if loaded == module:
-        print("reload: slot %d fx%d is running '%s' — verified via slot_info"
-              % (slot, fxpos, module))
+        print("reload: slot %d fx%d is running '%s'%s"
+              % (slot, fxpos, module,
+                 " — build %s verified" % running_build if running_build else ""))
         return 0
     print("reload: slot %d fx%d reports %r, not '%s'."
           % (slot, fxpos, loaded, module))

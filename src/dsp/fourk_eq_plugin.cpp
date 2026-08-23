@@ -31,6 +31,21 @@
 #include "FourKEQPresetRuntime.hpp"
 #include "fourk_params.h"
 
+/* Build fingerprint, reported in the state blob as "build".
+ *
+ * A new .so on disk is NOT the running one: the chain host dlopen()s the
+ * plugin and an atomic mv swaps the directory entry while the process keeps
+ * the old inode mapped. Every signal available downstream lies about this —
+ * an on-device loadtest dlopens the FILE and passes, and slot_info happily
+ * confirms the module id because the id did not change. The only honest
+ * question is "which build is answering", so the plugin answers it. deploy.sh
+ * reads this string out of the freshly built .so and checks the running
+ * instance reports the same one.
+ *
+ * Upstream does the same thing (FourKEQ.h keeps BUILD_DATE/BUILD_TIME), and
+ * it touches no audio — it is a string in a snapshot. */
+#define FKQ_BUILD_ID "FKQBUILD:" __DATE__ " " __TIME__
+
 static const host_api_v1_t *g_host = nullptr;
 
 static void fkq_log(const char *msg)
@@ -50,7 +65,7 @@ static void fkq_log(const char *msg)
 
 /* Response curve served to the remote panel. 128 points is one per column of
  * the Move's 128px display and plenty for a browser canvas. */
-#define FKQ_CURVE_POINTS 128
+#define FKQ_CURVE_POINTS 64
 #define FKQ_CURVE_F_LO   20.0f
 #define FKQ_CURVE_F_HI   20000.0f
 
@@ -77,7 +92,10 @@ struct fkq_instance {
 
     /* serve buffers (control thread only) */
     char chain_buf[8192];
-    char state_buf[1024];
+    /* Sized for the 22 params plus the readouts, the curve included. The
+     * curve alone is ~64*6 bytes, so the old 1 KB silently truncated the blob
+     * and get_param returned -1 — which reads to a UI as "no values at all". */
+    char state_buf[3072];
 };
 
 static float fkq_clamp(const fkq_param_t *p, float v)
@@ -556,6 +574,8 @@ static void fkq_refresh_curve(fkq_instance *inst)
     o[w < cap ? w : cap - 1] = 0;
 }
 
+static void fkq_refresh_curve(fkq_instance *inst);
+
 static int fkq_get_param(void *instance, const char *key, char *buf, int buf_len)
 {
     auto *inst = (fkq_instance *)instance;
@@ -629,7 +649,8 @@ static int fkq_get_param(void *instance, const char *key, char *buf, int buf_len
     if (!strcmp(key, "state")) {
         char *o = inst->state_buf;
         const size_t cap = sizeof inst->state_buf;
-        size_t w = (size_t)snprintf(o, cap, "{\"fkq\":1");
+        size_t w = (size_t)snprintf(o, cap, "{\"fkq\":1,\"build\":\"%s\"",
+                                    FKQ_BUILD_ID);
         for (int i = 0; i < FKQ_PARAM_COUNT; i++) {
             w += (size_t)snprintf(o + w, cap - w, ",\"%s\":%.6g",
                                   fkq_params[i].key,
@@ -638,6 +659,51 @@ static int fkq_get_param(void *instance, const char *key, char *buf, int buf_len
         }
         w += (size_t)snprintf(o + w, cap - w, ",\"preset\":%d",
                               inst->preset.load(std::memory_order_relaxed));
+
+        /* DERIVED fields, deliberately in the snapshot.
+         *
+         * schwung-manager pushes a component's values to a browser by reading
+         * THIS blob — fetchAllParams reads "<comp>:state" and its own log line
+         * says "sent via 'state'". It does NOT walk chain_params. So a key the
+         * plugin merely serves from get_param never reaches a remote panel at
+         * all, however it is declared. That is why the meters, the clip flag,
+         * the band centres and the curve all read back undefined in the
+         * browser while working perfectly against a local test harness.
+         *
+         * Safe to carry: the restore path looks each key up in fkq_params and
+         * ignores what it cannot find, so these are written on save and
+         * dropped on restore rather than fighting the values they derive from.
+         */
+        w += (size_t)snprintf(o + w, cap - w,
+            ",\"in_peak_l\":%.4f,\"in_peak_r\":%.4f"
+            ",\"out_peak_l\":%.4f,\"out_peak_r\":%.4f,\"clip\":%d",
+            (double)inst->dsp.getInputPeakL(), (double)inst->dsp.getInputPeakR(),
+            (double)inst->dsp.getOutputPeakL(), (double)inst->dsp.getOutputPeakR(),
+            inst->clip_count.exchange(0, std::memory_order_relaxed));
+        {
+            using FK = duskaudio::FourKEQDSP;
+            const bool black = inst->values[FKQ_P_EQ_TYPE].load(std::memory_order_relaxed) > 0.5f;
+            const struct { const char *k; int fi, gi, bi; FK::Band band; } bands[4] = {
+                { "lf_hz", FKQ_P_LF_FREQ, FKQ_P_LF_GAIN, FKQ_P_LF_BELL, FK::Band::LF },
+                { "lm_hz", FKQ_P_LM_FREQ, FKQ_P_LM_GAIN, -1,            FK::Band::LM },
+                { "hm_hz", FKQ_P_HM_FREQ, FKQ_P_HM_GAIN, -1,            FK::Band::HM },
+                { "hf_hz", FKQ_P_HF_FREQ, FKQ_P_HF_GAIN, FKQ_P_HF_BELL, FK::Band::HF },
+            };
+            for (int i = 0; i < 4; i++) {
+                const bool bell = bands[i].bi < 0
+                    ? true
+                    : inst->values[bands[i].bi].load(std::memory_order_relaxed) > 0.5f;
+                w += (size_t)snprintf(o + w, cap - w, ",\"%s\":%.1f", bands[i].k,
+                    (double)FK::calibratedEqFrequency(
+                        inst->values[bands[i].fi].load(std::memory_order_relaxed),
+                        inst->values[bands[i].gi].load(std::memory_order_relaxed),
+                        bands[i].band, black, bell));
+            }
+        }
+        if (w >= cap - 8) return -1;
+        fkq_refresh_curve(inst);
+        w += (size_t)snprintf(o + w, cap - w, ",\"curve\":\"%s\",\"curve_points\":%d",
+                              inst->curve_buf, FKQ_CURVE_POINTS);
         if (w >= cap - 8) return -1;
         w += (size_t)snprintf(o + w, cap - w, "}");
         return fkq_write_str(buf, buf_len, o);

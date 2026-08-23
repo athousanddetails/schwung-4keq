@@ -57,7 +57,11 @@ fi
 # address, so resolve the alias to its HostName.
 RHOST="$(ssh -G "$HOST" 2>/dev/null | awk '/^hostname /{print $2; exit}')"
 RHOST="${RHOST:-$HOST}"
-echo "==> reload fx$FXPOS on slot $SLOT ($RHOST)"
-python3 "$SRC/scripts/reload_fx_slot.py" "$RHOST" "$SLOT" "$FXPOS" 4k-eq || \
+# The build fingerprint compiled into the .so we just shipped. The reload
+# checks the RUNNING instance reports this same string — the only signal that
+# does not lie when the chain host keeps an old inode mapped.
+BUILD_ID="$(strings "$SRC/build/$SO" | grep -m1 '^FKQBUILD:')"
+echo "==> reload fx$FXPOS on slot $SLOT ($RHOST) — expecting ${BUILD_ID:-?}"
+python3 "$SRC/scripts/reload_fx_slot.py" "$RHOST" "$SLOT" "$FXPOS" 4k-eq "$BUILD_ID" || \
     echo "!! reload failed — re-pick the effect in the FX slot by hand, or the" \
          "device keeps running the OLD code" >&2
