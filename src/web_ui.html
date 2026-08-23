@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>4K EQ</title>
+<style>
+:root{--bg:#15161a;--panel:#1d1f25;--line:#2c2f38;--ink:#e8e6e1;--dim:#8b8f9a;
+      --brown:#b07a4a;--black:#6f7684;--accent:var(--brown);--warn:#d2603c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+     font:13px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:14px}
+header{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+h1{font:600 16px/1 ui-sans-serif,system-ui,sans-serif;letter-spacing:.14em;
+   text-transform:uppercase;margin:0}
+.sub{color:var(--dim);font-size:11px}
+.conn{margin-left:auto;font-size:11px;color:var(--dim);border:1px solid var(--line);
+      border-radius:3px;padding:2px 7px}
+.conn.ok{color:#7fb069;border-color:#33502c}
+.conn.err{color:var(--warn);border-color:#4a2b22}
+select{background:var(--panel);color:var(--ink);border:1px solid var(--line);
+       border-radius:3px;padding:3px 6px;font:inherit;font-size:12px}
+.graph{position:relative;background:var(--panel);border:1px solid var(--line);
+       border-radius:4px;overflow:hidden}
+canvas{display:block;width:100%;height:230px;touch-action:none}
+.meters{display:flex;gap:14px;align-items:center;padding:6px 10px;
+        border-top:1px solid var(--line);font-size:11px;color:var(--dim)}
+.mtr{flex:1;height:6px;background:#101116;border-radius:3px;overflow:hidden}
+.mtr>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#4f8f4a,#c9b545 78%,var(--warn))}
+.clip{padding:1px 6px;border-radius:3px;border:1px solid var(--line);color:var(--dim)}
+.clip.hot{background:var(--warn);color:#150d0a;border-color:var(--warn);font-weight:600}
+.pages{display:flex;gap:6px;margin:12px 0 8px}
+.pages button{flex:1;background:var(--panel);color:var(--dim);border:1px solid var(--line);
+              border-radius:3px;padding:6px;font:inherit;font-size:11px;letter-spacing:.1em;
+              text-transform:uppercase;cursor:pointer}
+.pages button.on{color:var(--ink);border-color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.cell{background:var(--panel);border:1px solid var(--line);border-radius:4px;
+      padding:8px 6px;text-align:center}
+.cell .lbl{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+.cell .val{font-size:13px;margin-top:2px;font-variant-numeric:tabular-nums}
+.dial{width:100%;height:46px;cursor:ns-resize;touch-action:none;display:block}
+.cell.sw{cursor:pointer}
+.cell.sw .val{color:var(--dim)}
+.cell.sw.on .val{color:var(--accent);font-weight:600}
+footer{margin-top:12px;color:var(--dim);font-size:10px;line-height:1.6}
+@media(max-width:560px){.grid{grid-template-columns:repeat(2,1fr)}canvas{height:180px}}
+</style></head><body><div class="wrap">
+
+<header>
+  <h1>4K EQ</h1><span class="sub" id="voice">Brown</span>
+  <select id="slotSel" style="display:none"></select>
+  <span class="conn" id="conn">connecting…</span>
+</header>
+
+<div class="graph">
+  <canvas id="cv" width="1600" height="460"></canvas>
+  <div class="meters">
+    <span>IN</span><span class="mtr"><i id="mIn"></i></span>
+    <span>OUT</span><span class="mtr"><i id="mOut"></i></span>
+    <span class="clip" id="clip">CLIP</span>
+  </div>
+</div>
+
+<div class="pages">
+  <button data-p="0" class="on">Main</button>
+  <button data-p="1">Bands</button>
+  <button data-p="2">Setup</button>
+</div>
+<div class="grid" id="grid"></div>
+
+<footer id="foot"></footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+/* 4K EQ remote panel.
+ *
+ * The response curve is NOT computed here. The plugin serves it from the same
+ * designCurve() its audio path uses, so the drawing cannot disagree with what
+ * you are hearing — and the calibration (measured anchor tables, per band, per
+ * voicing) stays in one place instead of growing a JavaScript copy that drifts.
+ * Same reason the band handles are positioned from lf_hz/lm_hz/hm_hz/hf_hz:
+ * a band's dial marking and its audible centre are different numbers and only
+ * the C++ knows the mapping.
+ */
+var MODULE_ID="4k-eq";
+var COMPONENTS=["synth","fx1","fx2","fx3","fx4","fx5","fx6","fx7","fx8"];
+var bridge=null,ws=null,slot=0,comp="fx1";
+var META={},values={},page=0;
+
+var PAGES=[
+ ["lf_gain","lm_gain","hm_gain","hf_gain","hpf_freq","lpf_freq","input_gain","output_gain"],
+ ["lf_freq","lm_freq","hm_freq","hf_freq","lm_q","hm_q","lf_bell","hf_bell"],
+ ["hpf_enabled","lpf_enabled","eq_type","auto_gain","oversampling","bypass"]
+];
+/* band -> [gain key, freq key, audible-centre readout] */
+var BANDS=[["lf_gain","lf_freq","lf_hz"],["lm_gain","lm_freq","lm_hz"],
+           ["hm_gain","hm_freq","hm_hz"],["hf_gain","hf_freq","hf_hz"]];
+
+var connEl=document.getElementById("conn"),gridEl=document.getElementById("grid"),
+    cv=document.getElementById("cv"),ctx=cv.getContext("2d"),
+    footEl=document.getElementById("foot"),voiceEl=document.getElementById("voice");
+
+function key(k){return comp+":"+k;}
+function meta(k){return META[k]||{type:"float",min:0,max:1};}
+function raw(k){var v=values[key(k)];return (v===undefined||v===null)?"":String(v);}
+function num(k,d){
+  var r=raw(k); if(r==="")return d;
+  var m=meta(k);
+  if(m.type==="enum"&&m.options){var i=m.options.indexOf(r);if(i>=0)return i;}
+  var f=parseFloat(r); return isNaN(f)?d:f;
+}
+function send(k,v){
+  values[key(k)]=String(v);
+  if(bridge){bridge.setParam(key(k),String(v));}
+  else if(ws&&ws.readyState===1)
+    ws.send(JSON.stringify({type:"set_param",slot:slot,key:key(k),value:String(v)}));
+  draw();
+}
+function fmt(k){
+  var m=meta(k),r=raw(k);
+  if(m.type==="enum")return r||"—";
+  var v=num(k,0);
+  if(k==="hpf_freq"&&v<=16.5)return "OUT";
+  if(k==="lpf_freq"&&v>=15200.5)return "OUT";
+  var d=(m.display_format||"").indexOf("2")>=0?2:(m.unit==="dB"?1:0);
+  return v.toFixed(d)+(m.unit?" "+m.unit:"");
+}
+
+/* ---------------- curve ---------------- */
+var F_LO=20,F_HI=20000,DB=18;
+function xOf(f,w){return w*Math.log(f/F_LO)/Math.log(F_HI/F_LO);}
+function yOf(db,h){return h*(0.5-db/(2*DB));}
+
+function draw(){
+  var w=cv.width,h=cv.height;
+  var black=raw("eq_type")==="Black";
+  var accent=black?"#6f7684":"#b07a4a";
+  document.documentElement.style.setProperty("--accent",accent);
+  voiceEl.textContent=black?"Black · G-series":"Brown · E-series";
+
+  ctx.clearRect(0,0,w,h);
+  ctx.lineWidth=2;
+
+  /* grid */
+  ctx.strokeStyle="#2c2f38";ctx.fillStyle="#6b6f79";
+  ctx.font="22px ui-sans-serif,system-ui,sans-serif";
+  [30,100,300,1000,3000,10000].forEach(function(f){
+    var x=xOf(f,w);ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();
+    ctx.fillText(f>=1000?(f/1000)+"k":String(f),x+5,h-8);
+  });
+  [-12,-6,6,12].forEach(function(d){
+    var y=yOf(d,h);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
+  });
+  ctx.strokeStyle="#3d414c";ctx.beginPath();
+  ctx.moveTo(0,yOf(0,h));ctx.lineTo(w,yOf(0,h));ctx.stroke();
+
+  /* the plugin's own response */
+  var pts=raw("curve").split(",");
+  if(pts.length>4){
+    ctx.strokeStyle=accent;ctx.lineWidth=3;ctx.beginPath();
+    for(var i=0;i<pts.length;i++){
+      var f=F_LO*Math.pow(F_HI/F_LO,i/(pts.length-1)),v=parseFloat(pts[i]);
+      if(isNaN(v))continue;
+      var x=xOf(f,w),y=yOf(v,h);
+      i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+    }
+    ctx.stroke();
+    ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();
+    ctx.globalAlpha=0.10;ctx.fillStyle=accent;ctx.fill();ctx.globalAlpha=1;
+  }else{
+    ctx.fillStyle="#6b6f79";ctx.font="26px ui-sans-serif,system-ui,sans-serif";
+    ctx.fillText("waiting for the plugin…",24,36);
+  }
+
+  /* band handles, drawn where the band actually is */
+  if(raw("bypass")==="On"){ctx.globalAlpha=0.35;}
+  BANDS.forEach(function(b,i){
+    var hz=num(b[2],0); if(hz<=0)return;
+    var g=num(b[0],0),x=xOf(hz,w),y=yOf(g,h);
+    ctx.beginPath();ctx.arc(x,y,11,0,6.284);
+    ctx.fillStyle=Math.abs(g)>0.05?accent:"#4a4e58";ctx.fill();
+    ctx.strokeStyle="#15161a";ctx.lineWidth=3;ctx.stroke();
+    ctx.fillStyle="#15161a";ctx.font="600 15px ui-sans-serif,system-ui,sans-serif";
+    ctx.textAlign="center";ctx.fillText(["L","LM","HM","H"][i],x,y+5);
+    ctx.textAlign="left";
+  });
+  ctx.globalAlpha=1;
+}
+
+/* drag a handle: X writes the band's control coordinate, Y its gain.
+ * X is mapped log-linearly across the control range, which is close but not
+ * exact — the plugin recomputes the true centre and the handle settles there
+ * on the next update. Deliberate: the alternative is inverting a measured
+ * anchor table in JavaScript. */
+var drag=null;
+function pos(e){
+  var r=cv.getBoundingClientRect();
+  var t=e.touches?e.touches[0]:e;
+  return {x:(t.clientX-r.left)/r.width*cv.width,y:(t.clientY-r.top)/r.height*cv.height};
+}
+cv.addEventListener("pointerdown",function(e){
+  var p=pos(e),best=-1,bd=1e9;
+  BANDS.forEach(function(b,i){
+    var hz=num(b[2],0); if(hz<=0)return;
+    var dx=p.x-xOf(hz,cv.width),dy=p.y-yOf(num(b[0],0),cv.height);
+    var d=Math.sqrt(dx*dx+dy*dy); if(d<bd&&d<70){bd=d;best=i;}
+  });
+  if(best<0)return;
+  drag=best;cv.setPointerCapture(e.pointerId);e.preventDefault();
+});
+cv.addEventListener("pointermove",function(e){
+  if(drag===null)return;
+  var b=BANDS[drag],p=pos(e),mf=meta(b[1]),mg=meta(b[0]);
+  var t=Math.min(1,Math.max(0,p.x/cv.width));
+  var f=F_LO*Math.pow(F_HI/F_LO,t);
+  var cf=Math.min(mf.max,Math.max(mf.min,f));
+  var g=Math.min(mg.max,Math.max(mg.min,(0.5-p.y/cv.height)*2*DB));
+  send(b[1],cf.toFixed(2)); send(b[0],g.toFixed(2));
+  e.preventDefault();
+});
+["pointerup","pointercancel"].forEach(function(t){
+  cv.addEventListener(t,function(){drag=null;});
+});
+
+/* ---------------- controls ---------------- */
+function dial(k){
+  var m=meta(k),v=num(k,m.min||0);
+  var t=(v-m.min)/((m.max-m.min)||1);
+  var a0=-Math.PI*1.25,a1=Math.PI*0.25,a=a0+(a1-a0)*t;
+  var c=document.createElement("canvas");
+  c.className="dial";c.width=120;c.height=92;
+  var g=c.getContext("2d"),cx=60,cy=52,r=32;
+  g.lineWidth=8;g.lineCap="round";
+  g.strokeStyle="#2c2f38";g.beginPath();g.arc(cx,cy,r,a0,a1);g.stroke();
+  var bip=m.min<0&&m.max>0;
+  var from=bip?a0+(a1-a0)*((0-m.min)/(m.max-m.min)):a0;
+  g.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue("--accent")||"#b07a4a";
+  g.beginPath();g.arc(cx,cy,r,Math.min(from,a),Math.max(from,a));g.stroke();
+  g.strokeStyle="#e8e6e1";g.lineWidth=4;g.beginPath();
+  g.moveTo(cx+Math.cos(a)*(r-13),cy+Math.sin(a)*(r-13));
+  g.lineTo(cx+Math.cos(a)*(r+4),cy+Math.sin(a)*(r+4));g.stroke();
+  return c;
+}
+function bindDial(c,k){
+  var m=meta(k),active=false,y0=0,v0=0;
+  c.addEventListener("pointerdown",function(e){
+    active=true;y0=e.clientY;v0=num(k,m.min||0);
+    c.setPointerCapture(e.pointerId);e.preventDefault();
+  });
+  c.addEventListener("pointermove",function(e){
+    if(!active)return;
+    var span=(m.max-m.min)||1;
+    var step=e.shiftKey?0.25:1;
+    var v=v0+(y0-e.clientY)/160*span*step;
+    v=Math.min(m.max,Math.max(m.min,v));
+    send(k,(m.type==="int")?String(Math.round(v)):v.toFixed(3));
+    e.preventDefault();
+  });
+  ["pointerup","pointercancel"].forEach(function(t){
+    c.addEventListener(t,function(){active=false;});
+  });
+  c.addEventListener("dblclick",function(){
+    if(m["default"]!==undefined)send(k,String(m["default"]));
+  });
+}
+function build(){
+  gridEl.innerHTML="";
+  PAGES[page].forEach(function(k){
+    var m=meta(k);
+    var d=document.createElement("div");d.className="cell";
+    var lbl=document.createElement("div");lbl.className="lbl";lbl.textContent=m.name||k;
+    var val=document.createElement("div");val.className="val";val.textContent=fmt(k);
+    if(m.type==="enum"&&m.options&&m.options.length===2){
+      d.className="cell sw"+(num(k,0)?" on":"");
+      d.appendChild(lbl);d.appendChild(val);
+      d.onclick=function(){send(k,m.options[num(k,0)?0:1]);build();};
+    }else if(m.type==="enum"){
+      d.appendChild(lbl);
+      var s=document.createElement("select");
+      m.options.forEach(function(o,i){
+        var op=document.createElement("option");op.value=o;op.textContent=o;
+        if(i===num(k,0))op.selected=true;s.appendChild(op);
+      });
+      s.onchange=function(){send(k,s.value);build();};
+      d.appendChild(s);
+    }else{
+      d.appendChild(lbl);
+      var c=dial(k);bindDial(c,k);d.appendChild(c);d.appendChild(val);
+    }
+    gridEl.appendChild(d);
+  });
+}
+document.querySelectorAll(".pages button").forEach(function(b){
+  b.onclick=function(){
+    page=parseInt(b.dataset.p,10);
+    document.querySelectorAll(".pages button").forEach(function(o){o.classList.remove("on");});
+    b.classList.add("on");build();
+  };
+});
+
+/* ---------------- meters ---------------- */
+var clipEl=document.getElementById("clip"),clipHold=0;
+function meters(){
+  var i=Math.max(num("in_peak_l",0),num("in_peak_r",0));
+  var o=Math.max(num("out_peak_l",0),num("out_peak_r",0));
+  var db=function(v){return v<=0.0001?0:Math.max(0,Math.min(100,(20*Math.log(v)/Math.LN10+60)/60*100));};
+  document.getElementById("mIn").style.width=db(i)+"%";
+  document.getElementById("mOut").style.width=db(o)+"%";
+  if(num("clip",0)>0)clipHold=12;
+  clipEl.className="clip"+(clipHold>0?" hot":"");
+  if(clipHold>0)clipHold--;
+}
+
+function refresh(){build();draw();meters();
+  footEl.textContent="4K EQ 2 by Dusk Audio (GPL-3.0) · Move port by athousanddetails · "
+    +"latency "+(raw("latency")||"0")+" samples · curve drawn by the plugin";
+}
+function applyChainParams(list){
+  if(!list)return;
+  META={};
+  list.forEach(function(p){
+    META[p.key]={type:p.type,min:p.min,max:p.max,options:p.options,name:p.name,
+                 unit:p.unit,display_format:p.display_format,"default":p["default"]};
+  });
+  refresh();
+}
+function onParams(p){var t=false;for(var k in p){values[k]=p[k];t=true;}
+  if(t){draw();meters();
+    PAGES[page].forEach(function(){});
+    var cells=gridEl.querySelectorAll(".cell .val");
+    PAGES[page].forEach(function(k,i){if(cells[i])cells[i].textContent=fmt(k);});
+  }}
+
+/* ---------------- transport ---------------- */
+if(window.parent!==window&&window.schwungRemote){
+  bridge=window.schwungRemote;
+  comp=window.schwungRemote.component
+       ||new URLSearchParams(location.search).get("component")||"fx1";
+  connEl.textContent="embedded · "+comp;connEl.className="conn ok";
+  bridge.onParamChange(onParams);
+  bridge.getChainParams().then(applyChainParams);
+}else{
+  var sel=document.getElementById("slotSel");sel.style.display="";
+  for(var i=0;i<4;i++){var o=document.createElement("option");
+    o.value=String(i);o.textContent="Track "+(i+1);sel.appendChild(o);}
+  sel.onchange=function(){slot=parseInt(sel.value,10);values={};subscribe();};
+  var subscribe=function(){
+    if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:"subscribe",slot:slot}));};
+  var connect=function(){
+    var host=location.host||"move.local:7700";
+    connEl.textContent="connecting…";connEl.className="conn";
+    try{ws=new WebSocket("ws://"+host+"/ws/remote-ui");}
+    catch(e){connEl.textContent="no connection";connEl.className="conn err";return;}
+    ws.onopen=function(){connEl.className="conn ok";subscribe();};
+    ws.onclose=function(){connEl.textContent="disconnected";connEl.className="conn err";
+      setTimeout(connect,2500);};
+    ws.onmessage=function(ev){
+      var m;try{m=JSON.parse(ev.data);}catch(e){return;}
+      if(m.slot!==undefined&&m.slot!==slot)return;
+      if(m.type==="slot_info"){
+        var found=null;COMPONENTS.forEach(function(c){if(m[c]===MODULE_ID)found=c;});
+        if(found&&found!==comp){comp=found;refresh();}
+        connEl.textContent=found?("connected · "+found):"4K EQ not in this track";
+        connEl.className=found?"conn ok":"conn err";
+      }else if(m.type==="chain_params"&&m.component===comp){
+        var d=m.data;if(typeof d==="string"){try{d=JSON.parse(d);}catch(e){d=null;}}
+        applyChainParams(d);
+      }else if(m.type==="param_update"){onParams(m.params||{});}
+    };
+  };
+  connect();setInterval(subscribe,4000);
+}
+refresh();
+setInterval(function(){meters();},120);
+})();
+</script></body></html>

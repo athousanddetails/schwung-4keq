@@ -1,0 +1,43 @@
+{
+ "title": "4K EQ",
+ "summary": "British console EQ for the master bus. Four calibrated bands, stepped filters, Brown and Black voicings.",
+ "pages": [
+  {
+   "title": "Main",
+   "lines": [
+    "LF LMF HMF HF are the four band",
+    "gains, -15..+15 dB.",
+    "HPF and LPF are the stepped",
+    "console filters; turn their",
+    "enables on in Setup.",
+    "In drives the console's own",
+    "nonlinearity, like the reference",
+    "channel. Out trims what leaves."
+   ]
+  },
+  {
+   "title": "Bands",
+   "lines": [
+    "Each band's frequency, plus Q for",
+    "the two mid bands.",
+    "LF Bl / HF Bl switch those bands",
+    "from shelf to bell.",
+    "Ranges overlap on purpose: they",
+    "are the console's own dials."
+   ]
+  },
+  {
+   "title": "Setup",
+   "lines": [
+    "Type: Brown is the E-series,",
+    "Black the G-series. Brown has",
+    "transformers and constant-Q mids;",
+    "Black is proportional-Q.",
+    "OS: 2x is the default. 1x saves a",
+    "little CPU and is clean in Brown.",
+    "Byp crossfades to a bit-exact",
+    "dry path."
+   ]
+  }
+ ]
+}

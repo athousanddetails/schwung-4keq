@@ -1,0 +1,318 @@
+{
+ "id": "4k-eq",
+ "name": "4K EQ",
+ "abbrev": "4KEQ",
+ "version": "0.1.0",
+ "description": "British console EQ: four calibrated bands with Brown and Black voicings, stepped high- and low-pass filters, shared-stage band interaction and native console nonlinearity.",
+ "author": "4K EQ 2 by Dusk Audio (GPL-3.0); port: athousanddetails",
+ "dsp": "4k-eq.so",
+ "api_version": 2,
+ "component_type": "audio_fx",
+ "capabilities": {
+  "audio_out": true,
+  "audio_in": true,
+  "midi_in": false,
+  "midi_out": false,
+  "chainable": true,
+  "component_type": "audio_fx",
+  "chain_params": [
+   {
+    "key": "lf_gain",
+    "name": "LF",
+    "type": "float",
+    "min": -15.0,
+    "max": 15.0,
+    "default": 0.0,
+    "unit": "dB",
+    "display_format": ".1f"
+   },
+   {
+    "key": "lm_gain",
+    "name": "LMF",
+    "type": "float",
+    "min": -15.0,
+    "max": 15.0,
+    "default": 0.0,
+    "unit": "dB",
+    "display_format": ".1f"
+   },
+   {
+    "key": "hm_gain",
+    "name": "HMF",
+    "type": "float",
+    "min": -15.0,
+    "max": 15.0,
+    "default": 0.0,
+    "unit": "dB",
+    "display_format": ".1f"
+   },
+   {
+    "key": "hf_gain",
+    "name": "HF",
+    "type": "float",
+    "min": -15.0,
+    "max": 15.0,
+    "default": 0.0,
+    "unit": "dB",
+    "display_format": ".1f"
+   },
+   {
+    "key": "hpf_freq",
+    "name": "HPF",
+    "type": "float",
+    "min": 16.0,
+    "max": 350.0,
+    "default": 16.0,
+    "unit": "Hz",
+    "display_format": ".0f"
+   },
+   {
+    "key": "lpf_freq",
+    "name": "LPF",
+    "type": "float",
+    "min": 3000.0,
+    "max": 15201.0,
+    "default": 15201.0,
+    "unit": "Hz",
+    "display_format": ".0f"
+   },
+   {
+    "key": "input_gain",
+    "name": "In",
+    "type": "float",
+    "min": -12.0,
+    "max": 12.0,
+    "default": 0.0,
+    "unit": "dB",
+    "display_format": ".1f"
+   },
+   {
+    "key": "output_gain",
+    "name": "Out",
+    "type": "float",
+    "min": -12.0,
+    "max": 12.0,
+    "default": 0.0,
+    "unit": "dB",
+    "display_format": ".1f"
+   },
+   {
+    "key": "lf_freq",
+    "name": "LF Hz",
+    "type": "float",
+    "min": 30.0,
+    "max": 450.0,
+    "default": 200.0,
+    "unit": "Hz",
+    "display_format": ".0f"
+   },
+   {
+    "key": "lm_freq",
+    "name": "LMF Hz",
+    "type": "float",
+    "min": 200.0,
+    "max": 2500.0,
+    "default": 1000.0,
+    "unit": "Hz",
+    "display_format": ".0f"
+   },
+   {
+    "key": "hm_freq",
+    "name": "HMF Hz",
+    "type": "float",
+    "min": 600.0,
+    "max": 7000.0,
+    "default": 3000.0,
+    "unit": "Hz",
+    "display_format": ".0f"
+   },
+   {
+    "key": "hf_freq",
+    "name": "HF Hz",
+    "type": "float",
+    "min": 1500.0,
+    "max": 16000.0,
+    "default": 8000.0,
+    "unit": "Hz",
+    "display_format": ".0f"
+   },
+   {
+    "key": "lm_q",
+    "name": "LMF Q",
+    "type": "float",
+    "min": 0.5,
+    "max": 3.0,
+    "default": 1.5,
+    "display_format": ".2f"
+   },
+   {
+    "key": "hm_q",
+    "name": "HMF Q",
+    "type": "float",
+    "min": 0.5,
+    "max": 3.0,
+    "default": 1.5,
+    "display_format": ".2f"
+   },
+   {
+    "key": "lf_bell",
+    "name": "LF Bell",
+    "type": "enum",
+    "options": [
+     "Off",
+     "On"
+    ],
+    "default": "Off",
+    "viz": {
+     "kind": "switch"
+    }
+   },
+   {
+    "key": "hf_bell",
+    "name": "HF Bell",
+    "type": "enum",
+    "options": [
+     "Off",
+     "On"
+    ],
+    "default": "Off",
+    "viz": {
+     "kind": "switch"
+    }
+   },
+   {
+    "key": "hpf_enabled",
+    "name": "HPF On",
+    "type": "enum",
+    "options": [
+     "Off",
+     "On"
+    ],
+    "default": "Off",
+    "viz": {
+     "kind": "switch"
+    }
+   },
+   {
+    "key": "lpf_enabled",
+    "name": "LPF On",
+    "type": "enum",
+    "options": [
+     "Off",
+     "On"
+    ],
+    "default": "Off",
+    "viz": {
+     "kind": "switch"
+    }
+   },
+   {
+    "key": "eq_type",
+    "name": "Type",
+    "type": "enum",
+    "options": [
+     "Brown",
+     "Black"
+    ],
+    "default": "Brown"
+   },
+   {
+    "key": "auto_gain",
+    "name": "Auto",
+    "type": "enum",
+    "options": [
+     "Off",
+     "On"
+    ],
+    "default": "Off",
+    "viz": {
+     "kind": "switch"
+    }
+   },
+   {
+    "key": "oversampling",
+    "name": "OS",
+    "type": "enum",
+    "options": [
+     "1x",
+     "2x",
+     "4x"
+    ],
+    "default": "2x"
+   },
+   {
+    "key": "bypass",
+    "name": "Byp",
+    "type": "enum",
+    "options": [
+     "Off",
+     "On"
+    ],
+    "default": "Off",
+    "viz": {
+     "kind": "switch"
+    }
+   },
+   {
+    "key": "in_peak_l",
+    "name": "in_peak_l",
+    "type": "float",
+    "access": "read"
+   },
+   {
+    "key": "in_peak_r",
+    "name": "in_peak_r",
+    "type": "float",
+    "access": "read"
+   },
+   {
+    "key": "out_peak_l",
+    "name": "out_peak_l",
+    "type": "float",
+    "access": "read"
+   },
+   {
+    "key": "out_peak_r",
+    "name": "out_peak_r",
+    "type": "float",
+    "access": "read"
+   },
+   {
+    "key": "clip",
+    "name": "clip",
+    "type": "int",
+    "access": "read"
+   },
+   {
+    "key": "curve",
+    "name": "curve",
+    "type": "string",
+    "access": "read"
+   },
+   {
+    "key": "lf_hz",
+    "name": "lf_hz",
+    "type": "float",
+    "access": "read"
+   },
+   {
+    "key": "lm_hz",
+    "name": "lm_hz",
+    "type": "float",
+    "access": "read"
+   },
+   {
+    "key": "hm_hz",
+    "name": "hm_hz",
+    "type": "float",
+    "access": "read"
+   },
+   {
+    "key": "hf_hz",
+    "name": "hf_hz",
+    "type": "float",
+    "access": "read"
+   }
+  ]
+ }
+}

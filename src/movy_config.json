@@ -1,0 +1,21 @@
+{
+ "module": "4k-eq",
+ "name": "4K EQ",
+ "pages": [
+  {
+   "name": "Main",
+   "params": ["lf_gain", "lm_gain", "hm_gain", "hf_gain",
+              "hpf_freq", "lpf_freq", "input_gain", "output_gain"]
+  },
+  {
+   "name": "Bands",
+   "params": ["lf_freq", "lm_freq", "hm_freq", "hf_freq",
+              "lm_q", "hm_q", "lf_bell", "hf_bell"]
+  },
+  {
+   "name": "Setup",
+   "params": ["hpf_enabled", "lpf_enabled", "eq_type",
+              "auto_gain", "oversampling", "bypass"]
+  }
+ ]
+}
