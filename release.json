@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "download_url": "https://github.com/athousanddetails/schwung-4keq/releases/download/v1.0.0/4k-eq-module.tar.gz",
+  "name": "4K EQ",
+  "description": "British console EQ: four calibrated bands with Brown and Black voicings, stepped high- and low-pass filters, shared-stage band interaction and native console nonlinearity.",
+  "repo_url": "https://github.com/athousanddetails/schwung-4keq"
+}
