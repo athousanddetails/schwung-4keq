@@ -3,13 +3,23 @@
  "name": "4K EQ",
  "pages": [
   {
+   "name": "MASTER",
+   "params": [
+    "eq_type",
+    "oversampling",
+    "bypass",
+    "auto_gain",
+    "input_gain",
+    "output_gain"
+   ]
+  },
+  {
    "name": "LF",
    "params": [
     "lf_gain",
     "lf_freq",
     "lf_bell",
-    "hpf_freq",
-    "hpf_enabled"
+    "hpf_freq"
    ]
   },
   {
@@ -34,19 +44,7 @@
     "hf_gain",
     "hf_freq",
     "hf_bell",
-    "lpf_freq",
-    "lpf_enabled"
-   ]
-  },
-  {
-   "name": "MASTER",
-   "params": [
-    "eq_type",
-    "oversampling",
-    "bypass",
-    "auto_gain",
-    "input_gain",
-    "output_gain"
+    "lpf_freq"
    ]
   }
  ]

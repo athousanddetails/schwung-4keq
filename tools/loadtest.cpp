@@ -162,8 +162,15 @@ static const Probe kProbes[] = {
     { "hm_q",         "3",     "hm_gain",     "10"    },
     { "lf_bell",      "On",    "lf_gain",     "10"    },
     { "hf_bell",      "On",    "hf_gain",     "10"    },
-    { "hpf_enabled",  "On",    "hpf_freq",    "300"   },
-    { "lpf_enabled",  "On",    "lpf_freq",    "4000"  },
+    /* Both enables are now DERIVED from their dial (the console's OUT
+     * detent), so the prerequisite that raises the dial already switches them
+     * on. Probing them "On" therefore sets what is already set and nothing
+     * moves — which is correct behaviour and a useless assertion. Probe the
+     * other direction instead: with the dial raised, switching the enable
+     * OFF must take the filter out and change the audio. That also keeps the
+     * independent-set path under test, which automation relies on. */
+    { "hpf_enabled",  "Off",   "hpf_freq",    "300"   },
+    { "lpf_enabled",  "Off",   "lpf_freq",    "4000"  },
     { "eq_type",      "Black", "lm_gain",     "10"    },
     { "auto_gain",    "On",    "lf_gain",     "12"    },
     { "oversampling", "4x",    "hf_gain",     "12"    },
@@ -283,12 +290,22 @@ int main(int argc, char **argv)
                 for (size_t f = span.find(pat); f != std::string::npos; f = span.find(pat, f + 1))
                     n++;
             }
+            const bool derived = !strcmp(kProbes[i].key, "hpf_enabled")
+                              || !strcmp(kProbes[i].key, "lpf_enabled");
+            if (derived) {
+                /* Folded into the filter dial, like the console's OUT detent.
+                 * They must NOT have a knob — a switch beside the dial is the
+                 * thing that let an HPF sit at 168 Hz doing nothing. */
+                if (n != 0) { printf("       %s still has a knob\n", kProbes[i].key); dupes++; }
+                continue;
+            }
             if (n == 1) placed++;
             else if (n > 1) { printf("       %s is on %d pages\n", kProbes[i].key, n); dupes++; }
             else printf("       %s is on NO page\n", kProbes[i].key);
         }
-        ok(placed == kNumProbes && dupes == 0,
-           "all %d controls sit on exactly one page (%d placed)", kNumProbes, placed);
+        ok(placed == kNumProbes - 2 && dupes == 0,
+           "all %d controls sit on exactly one page, both enables derived (%d placed)",
+           kNumProbes - 2, placed);
     }
     ok(uh.find("\"list_param\":\"preset\"") != std::string::npos,
        "ui_hierarchy declares the preset browser");
@@ -449,6 +466,54 @@ int main(int argc, char **argv)
         set(api, ti, "lf_gain", "12");
         ok(get(api, ti, "curve") != flat, "curve follows a parameter change");
         api->destroy_instance(ti);
+    }
+
+    printf("\n== the filter dial carries OUT ==\n");
+    {
+        /* Turning the dial off its OUT endpoint must engage the filter, and
+         * back to the endpoint must disengage it — one control, as on the
+         * console. Checked through set_param, and checked in the AUDIO too,
+         * because an enable flag that flips without changing the sound would
+         * pass a state-only test. */
+        void *ti = api->create_instance(".", nullptr);
+        ok(get(api, ti, "hpf_enabled") == "Off", "HPF starts out of circuit");
+        const uint64_t flat = render_hash(api, ti, 0.5f);
+        set(api, ti, "hpf_freq", "250");
+        ok(get(api, ti, "hpf_enabled") == "On", "turning HPF up engages it");
+        ok(render_hash(api, ti, 0.5f) != flat, "and the audio changes");
+        set(api, ti, "hpf_freq", "16");
+        ok(get(api, ti, "hpf_enabled") == "Off", "back to OUT disengages it");
+        ok(render_hash(api, ti, 0.5f) == flat, "and the audio returns to flat");
+
+        ok(get(api, ti, "lpf_enabled") == "Off", "LPF starts out of circuit");
+        set(api, ti, "lpf_freq", "5000");
+        ok(get(api, ti, "lpf_enabled") == "On", "turning LPF down engages it");
+        set(api, ti, "lpf_freq", "15201");
+        ok(get(api, ti, "lpf_enabled") == "Off", "back to OUT disengages it");
+
+        /* The enables stay independently settable for automation. */
+        set(api, ti, "hpf_freq", "120");
+        set(api, ti, "hpf_enabled", "Off");
+        ok(get(api, ti, "hpf_enabled") == "Off",
+           "hpf_enabled can still be set directly, dial untouched");
+        ok(get(api, ti, "hpf_freq") == "120", "and the dial keeps its value");
+        api->destroy_instance(ti);
+    }
+
+    printf("\n== a restored state is literal, not re-derived ==\n");
+    {
+        /* A blob holding a raised dial AND a disengaged filter must come back
+         * exactly that way. If the dial's fan-out ran during restore it would
+         * switch the filter on and quietly change a saved set. */
+        void *a = api->create_instance(".", nullptr);
+        set(api, a, "hpf_freq", "250");
+        set(api, a, "hpf_enabled", "Off");
+        const std::string blob = get(api, a, "state");
+        void *b = api->create_instance(".", nullptr);
+        set(api, b, "state", blob.c_str());
+        ok(get(api, b, "hpf_freq") == "250", "restored dial is 250");
+        ok(get(api, b, "hpf_enabled") == "Off", "restored enable stayed Off");
+        api->destroy_instance(a); api->destroy_instance(b);
     }
 
     printf("\n== calibrated band centres ==\n");

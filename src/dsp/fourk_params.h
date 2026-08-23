@@ -90,6 +90,12 @@ enum FkqParamIndex {
     FKQ_VISIBLE_PARAM_COUNT = FKQ_PARAM_COUNT
 };
 
+/* The two dial positions the console prints as OUT. Upstream's preset
+ * runtime uses exactly these thresholds to decide a program's filter
+ * enables, so the dial and a recalled preset cannot disagree. */
+#define FKQ_HPF_OUT_HZ 16.0f
+#define FKQ_LPF_OUT_HZ 15201.0f
+
 typedef enum { FKQ_FLOAT, FKQ_INT, FKQ_ENUM } fkq_type_t;
 
 typedef struct {

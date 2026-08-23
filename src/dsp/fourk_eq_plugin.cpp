@@ -363,6 +363,32 @@ static void fkq_set_param(void *instance, const char *key, const char *val)
         v = (float)atof(val);
     }
     fkq_set_index(inst, idx, v);
+
+    /* The filter dial carries its own OUT position, like the console's does.
+     *
+     * Upstream splits each filter into a frequency and an enable because a
+     * plugin has room for both; the hardware has one dial whose bottom
+     * detent is OUT. Two separate controls here produced exactly the failure
+     * you would expect on the device: the HPF dial sitting at 168 Hz doing
+     * nothing because the enable beside it was still off.
+     *
+     * The threshold is not invented — it is upstream's own. Its preset
+     * runtime decides these enables the same way, `p.hpfFreq > 16.5` and
+     * `p.lpfFreq < 15200.5`, at the endpoints the dial legends print as OUT.
+     *
+     * This lives on the NAMED-KEY path deliberately, not in fkq_set_index:
+     *   - a state blob carries both keys and restore must be LITERAL, or
+     *     reloading a set would overwrite an enable the user had set;
+     *   - preset recall goes through fkq_set_index too, and takes its enables
+     *     from FourKEQPresetRuntime, which decides them from AUDIBLE Hz —
+     *     re-deriving them here from a control coordinate is the bug that
+     *     switches the filter on for the seven programs that want it out.
+     * Setting hpf_enabled / lpf_enabled directly still works, for automation
+     * and for anything that wants the two independent. */
+    if (idx == FKQ_P_HPF_FREQ)
+        fkq_set_index(inst, FKQ_P_HPF_ENABLED, v > FKQ_HPF_OUT_HZ + 0.5f ? 1.0f : 0.0f);
+    else if (idx == FKQ_P_LPF_FREQ)
+        fkq_set_index(inst, FKQ_P_LPF_ENABLED, v < FKQ_LPF_OUT_HZ - 0.5f ? 1.0f : 0.0f);
 }
 
 /* ------------------------------------------------------------------ */
@@ -388,8 +414,8 @@ static int fkq_write_str(char *buf, int buf_len, const char *s)
  *
  * Gain first on every band page, then Freq, then the band's third control.
  * Same order on all four, so the hand learns one shape. */
-static const char *const fkq_knobs_lf[5] = {
-    "lf_gain", "lf_freq", "lf_bell", "hpf_freq", "hpf_enabled",
+static const char *const fkq_knobs_lf[4] = {
+    "lf_gain", "lf_freq", "lf_bell", "hpf_freq",
 };
 static const char *const fkq_knobs_lmf[3] = {
     "lm_gain", "lm_freq", "lm_q",
@@ -397,8 +423,8 @@ static const char *const fkq_knobs_lmf[3] = {
 static const char *const fkq_knobs_hmf[3] = {
     "hm_gain", "hm_freq", "hm_q",
 };
-static const char *const fkq_knobs_hf[5] = {
-    "hf_gain", "hf_freq", "hf_bell", "lpf_freq", "lpf_enabled",
+static const char *const fkq_knobs_hf[4] = {
+    "hf_gain", "hf_freq", "hf_bell", "lpf_freq",
 };
 static const char *const fkq_knobs_master[6] = {
     "eq_type", "oversampling", "bypass", "auto_gain",
@@ -584,10 +610,10 @@ static int fkq_get_param(void *instance, const char *key, char *buf, int buf_len
             ",{\"level\":\"presets\",\"label\":\"PRESET\"}]},");
         if (w >= cap - 2) return -1;
 
-        w = fkq_write_level(o, cap, w, "lf",  "LF",  fkq_knobs_lf,  5, false);
+        w = fkq_write_level(o, cap, w, "lf",  "LF",  fkq_knobs_lf,  4, false);
         w = fkq_write_level(o, cap, w, "lmf", "LMF", fkq_knobs_lmf, 3, false);
         w = fkq_write_level(o, cap, w, "hmf", "HMF", fkq_knobs_hmf, 3, false);
-        w = fkq_write_level(o, cap, w, "hf",  "HF",  fkq_knobs_hf,  5, false);
+        w = fkq_write_level(o, cap, w, "hf",  "HF",  fkq_knobs_hf,  4, false);
         /* Preset browser. list_param / count_param / name_param get their own
          * page kind; deliberately no "knobs" here — a selector listed as a
          * knob is ignored by the planner and would be dead travel anyway. */
