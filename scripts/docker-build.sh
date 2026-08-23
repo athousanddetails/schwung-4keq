@@ -7,6 +7,11 @@ TARGET="${1:-all}"
 # ---- Contract gates. Each one exists because its failure mode is invisible
 # at runtime: a renamed parameter still "works", it just is not 4K EQ 2 any
 # more; a stale module.json still loads, the host just never offers the knob.
+# The DSP must BE Dusk Audio's, not resemble it. Byte-compares every file
+# under src/ported/ against a fresh upstream clone; skips gracefully offline.
+echo "=== vendored DSP is verbatim upstream ==="
+python3 tools/check_vendored_upstream.py
+
 echo "=== parameter contract vs upstream ==="
 python3 tools/check_upstream_params.py
 

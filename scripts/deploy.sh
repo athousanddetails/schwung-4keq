@@ -60,8 +60,21 @@ RHOST="${RHOST:-$HOST}"
 # The build fingerprint compiled into the .so we just shipped. The reload
 # checks the RUNNING instance reports this same string — the only signal that
 # does not lie when the chain host keeps an old inode mapped.
-BUILD_ID="$(strings "$SRC/build/$SO" | grep -m1 '^FKQBUILD:')"
+# NOT `grep -m1`: it exits on the first match and closes the pipe, which
+# SIGPIPEs `strings`. Under `set -o pipefail` that made this line return 141
+# and `set -e` killed the script HERE — after the loadtest printed all-green
+# and before the reload ran, so the deploy looked like a success and the
+# device kept running the previous build. Read the whole stream, take line 1.
+BUILD_ID="$(strings "$SRC/build/$SO" | grep '^FKQBUILD:' | sed -n '1p')"
 echo "==> reload fx$FXPOS on slot $SLOT ($RHOST) — expecting ${BUILD_ID:-?}"
-python3 "$SRC/scripts/reload_fx_slot.py" "$RHOST" "$SLOT" "$FXPOS" 4k-eq "$BUILD_ID" || \
-    echo "!! reload failed — re-pick the effect in the FX slot by hand, or the" \
-         "device keeps running the OLD code" >&2
+python3 "$SRC/scripts/reload_fx_slot.py" "$RHOST" "$SLOT" "$FXPOS" 4k-eq "$BUILD_ID" || {
+    echo "!! the slot is NOT running what was just shipped." >&2
+    echo "   Measured on this device: writing fx<N>:module over the manager" >&2
+    echo "   websocket does not make the chain host re-dlopen an AUDIO FX —" >&2
+    echo "   not with an unchanged value, and not by clearing it first. The" >&2
+    echo "   old inode stays mapped." >&2
+    echo "   What DOES work: reboot, which reloads the restored set from disk," >&2
+    echo "   or re-pick the effect in the slot by hand:" >&2
+    echo "     ssh $HOST /data/UserData/schwung/bin/schwung-heal --reboot" >&2
+    echo "   Then re-run this script to confirm the build id matches." >&2
+}
