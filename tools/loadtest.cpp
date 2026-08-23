@@ -261,9 +261,35 @@ int main(int argc, char **argv)
     }
 
     const std::string uh = get(api, inst, "ui_hierarchy");
-    ok(uh.find("\"root\"") != std::string::npos, "ui_hierarchy has root");
-    ok(uh.find("\"bands\"") != std::string::npos, "ui_hierarchy has bands");
-    ok(uh.find("\"setup\"") != std::string::npos, "ui_hierarchy has setup");
+    /* One page per band. Check every level is present AND that each band's
+     * own controls live on it — a hierarchy that merely parses can still put
+     * a control on the wrong page, which is the mistake worth catching. */
+    {
+        static const char *const kLevels[] = { "root", "lmf", "hmf", "hf", "master", "presets" };
+        for (const char *lv : kLevels) {
+            const std::string pat = std::string("\"") + lv + "\":{";
+            ok(uh.find(pat) != std::string::npos, "ui_hierarchy has level %s", lv);
+        }
+        /* every control must appear exactly once across all the knobs[] */
+        int placed = 0, dupes = 0;
+        for (int i = 0; i < kNumProbes; i++) {
+            const std::string pat = std::string("\"") + kProbes[i].key + "\"";
+            int n = 0;
+            for (size_t at = uh.find("\"knobs\":["); at != std::string::npos;
+                 at = uh.find("\"knobs\":[", at + 1)) {
+                const size_t end = uh.find(']', at);
+                if (end == std::string::npos) break;
+                const std::string span = uh.substr(at, end - at);
+                for (size_t f = span.find(pat); f != std::string::npos; f = span.find(pat, f + 1))
+                    n++;
+            }
+            if (n == 1) placed++;
+            else if (n > 1) { printf("       %s is on %d pages\n", kProbes[i].key, n); dupes++; }
+            else printf("       %s is on NO page\n", kProbes[i].key);
+        }
+        ok(placed == kNumProbes && dupes == 0,
+           "all %d controls sit on exactly one page (%d placed)", kNumProbes, placed);
+    }
     ok(uh.find("\"list_param\":\"preset\"") != std::string::npos,
        "ui_hierarchy declares the preset browser");
     /* A selector listed in knobs[] is ignored by the planner and would be

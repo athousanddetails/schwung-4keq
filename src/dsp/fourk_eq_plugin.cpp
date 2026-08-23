@@ -378,20 +378,31 @@ static int fkq_write_str(char *buf, int buf_len, const char *s)
     return n;
 }
 
-/* The eight knobs of each page, in order. Page 1 puts the four band gains on
- * the top row and the two filters plus the trims on the bottom, so the whole
- * EQ is one row of the grid — the reason the layout exists. */
-static const char *const fkq_knobs_main[8] = {
-    "lf_gain", "lm_gain", "hm_gain", "hf_gain",
-    "hpf_freq", "lpf_freq", "input_gain", "output_gain",
+/* One page per band — see the layout note in fourk_params.h.
+ *
+ * Each array is that band's own controls and nothing else, so a page never
+ * mixes two bands and you are never more than one page from the thing you
+ * are turning. The high-pass rides with LF and the low-pass with HF, because
+ * that is the end of the spectrum each one acts on; a separate FILTERS page
+ * would be one more page to remember.
+ *
+ * Gain first on every band page, then Freq, then the band's third control.
+ * Same order on all four, so the hand learns one shape. */
+static const char *const fkq_knobs_lf[5] = {
+    "lf_gain", "lf_freq", "lf_bell", "hpf_freq", "hpf_enabled",
 };
-static const char *const fkq_knobs_bands[8] = {
-    "lf_freq", "lm_freq", "hm_freq", "hf_freq",
-    "lm_q", "hm_q", "lf_bell", "hf_bell",
+static const char *const fkq_knobs_lmf[3] = {
+    "lm_gain", "lm_freq", "lm_q",
 };
-static const char *const fkq_knobs_setup[6] = {
-    "hpf_enabled", "lpf_enabled", "eq_type",
-    "auto_gain", "oversampling", "bypass",
+static const char *const fkq_knobs_hmf[3] = {
+    "hm_gain", "hm_freq", "hm_q",
+};
+static const char *const fkq_knobs_hf[5] = {
+    "hf_gain", "hf_freq", "hf_bell", "lpf_freq", "lpf_enabled",
+};
+static const char *const fkq_knobs_master[6] = {
+    "eq_type", "oversampling", "bypass", "auto_gain",
+    "input_gain", "output_gain",
 };
 
 static const char *fkq_type_name(fkq_type_t t)
@@ -429,6 +440,8 @@ static int fkq_write_param_array(char *o, size_t cap)
                                   p->display_format);
         if (fkq_is_switch_viz(p->key))
             w += (size_t)snprintf(o + w, cap - w, ",\"viz\":{\"kind\":\"switch\"}");
+        else if (fkq_is_no_viz(p->key))
+            w += (size_t)snprintf(o + w, cap - w, ",\"viz\":false");
         w += (size_t)snprintf(o + w, cap - w, "}");
         if (w >= cap - 64) return -1;
     }
@@ -538,31 +551,38 @@ static int fkq_get_param(void *instance, const char *key, char *buf, int buf_len
         char *o = inst->chain_buf;
         const size_t cap = sizeof inst->chain_buf;
         size_t w = (size_t)snprintf(o, cap, "{\"modes\":null,\"levels\":{");
+        /* LF is root. It is the first band, and a root that is itself a band
+         * keeps every page the same kind of thing — no "Main" page that is
+         * really a summary of five others. */
         w += (size_t)snprintf(o + w, cap - w,
-            "\"root\":{\"name\":\"Main\",\"children\":null,\"knobs\":[");
-        for (int i = 0; i < 8; i++)
+            "\"root\":{\"name\":\"LF\",\"children\":null,\"knobs\":[");
+        for (int i = 0; i < 5; i++)
             w += (size_t)snprintf(o + w, cap - w, "%s\"%s\"", i ? "," : "",
-                                  fkq_knobs_main[i]);
+                                  fkq_knobs_lf[i]);
         w += (size_t)snprintf(o + w, cap - w, "],\"params\":[");
-        for (int i = 0; i < 8; i++) {
-            const int idx = fkq_param_index(fkq_knobs_main[i]);
+        for (int i = 0; i < 5; i++) {
+            const int idx = fkq_param_index(fkq_knobs_lf[i]);
             if (idx < 0) continue;
             w += (size_t)snprintf(o + w, cap - w, "%s{\"key\":\"%s\",\"label\":\"%s\"}",
                                   i ? "," : "", fkq_params[idx].key, fkq_params[idx].name);
         }
         w += (size_t)snprintf(o + w, cap - w,
-            ",{\"level\":\"bands\",\"label\":\"Bands\"}"
-            ",{\"level\":\"setup\",\"label\":\"Setup\"}"
-            ",{\"level\":\"presets\",\"label\":\"Presets\"}]},");
+            ",{\"level\":\"lmf\",\"label\":\"LMF\"}"
+            ",{\"level\":\"hmf\",\"label\":\"HMF\"}"
+            ",{\"level\":\"hf\",\"label\":\"HF\"}"
+            ",{\"level\":\"master\",\"label\":\"MASTER\"}"
+            ",{\"level\":\"presets\",\"label\":\"PRESET\"}]},");
         if (w >= cap - 2) return -1;
 
-        w = fkq_write_level(o, cap, w, "bands", "Bands", fkq_knobs_bands, 8, false);
-        w = fkq_write_level(o, cap, w, "setup", "Setup", fkq_knobs_setup, 6, false);
+        w = fkq_write_level(o, cap, w, "lmf", "LMF", fkq_knobs_lmf, 3, false);
+        w = fkq_write_level(o, cap, w, "hmf", "HMF", fkq_knobs_hmf, 3, false);
+        w = fkq_write_level(o, cap, w, "hf", "HF", fkq_knobs_hf, 5, false);
+        w = fkq_write_level(o, cap, w, "master", "MASTER", fkq_knobs_master, 6, false);
         /* Preset browser. list_param / count_param / name_param get their own
          * page kind; deliberately no "knobs" here — a selector listed as a
          * knob is ignored by the planner and would be dead travel anyway. */
         w += (size_t)snprintf(o + w, cap - w,
-            "\"presets\":{\"name\":\"Presets\",\"children\":null,"
+            "\"presets\":{\"name\":\"PRESET\",\"children\":null,"
             "\"list_param\":\"preset\",\"count_param\":\"preset_count\","
             "\"name_param\":\"preset_name\"}");
         w += (size_t)snprintf(o + w, cap - w, "}}");

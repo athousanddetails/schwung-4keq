@@ -28,7 +28,7 @@ def parse_options(text):
     return out
 
 
-def parse_params(text, opts, switches):
+def parse_params(text, opts, switches, noviz):
     body = re.search(r"fkq_params\[FKQ_PARAM_COUNT\]\s*=\s*\{(.*?)\n\};", text, re.S)
     if not body:
         sys.exit("FAIL: no fkq_params table in " + str(HDR))
@@ -56,8 +56,15 @@ def parse_params(text, opts, switches):
             e["display_format"] = fmt.strip('"')
         if key in switches:
             e["viz"] = {"kind": "switch"}
+        elif key in noviz:
+            e["viz"] = False
         entries.append(e)
     return entries
+
+
+def parse_noviz(text):
+    body = re.search(r"fkq_no_viz\[\]\s*=\s*\{(.*?)\};", text, re.S)
+    return set(re.findall(r'"([a-z_0-9]+)"', body.group(1))) if body else set()
 
 
 def parse_switches(text):
@@ -109,7 +116,8 @@ def build(entries):
 
 def main():
     text = HDR.read_text()
-    doc = build(parse_params(text, parse_options(text), parse_switches(text))
+    doc = build(parse_params(text, parse_options(text), parse_switches(text),
+                            parse_noviz(text))
                 + parse_readouts(text))
     rendered = json.dumps(doc, indent=1) + "\n"
 

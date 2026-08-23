@@ -35,10 +35,23 @@
  * stay exactly as Dusk Audio wrote them, instead of being cut to fit a 5-char
  * knob readout.
  *
- * Layout, 22 params over three pages:
- *   Main   LF     LMF    HMF    HF     HPF   LPF   In    Out
- *   Bands  LF Hz  LMF Hz HMF Hz HF Hz  LMF Q HMF Q LF Bl HF Bl
- *   Setup  HPF On LPF On Type   AGain  OS    Byp
+ * Layout: ONE PAGE PER BAND, which is how the console reads and how the
+ * plugin's own channel strip is arranged. Six pages, 22 params, no control
+ * more than one page from the band it belongs to:
+ *
+ *   LF      Gain  Freq  Bell   HPF    HPF On
+ *   LMF     Gain  Freq  Q
+ *   HMF     Gain  Freq  Q
+ *   HF      Gain  Freq  Bell   LPF    LPF On
+ *   MASTER  Type  Ovrsmpl  Bypass  AutoGain  In  Out
+ *   PRESET  (browser level — not knobs)
+ *
+ * The filters sit with the band they act on: the high-pass on LF, the
+ * low-pass on HF. That is where you reach for them, and it keeps FILTERS
+ * from being a page you have to remember exists.
+ *
+ * Pages are deliberately not filled to eight. A band page holding only its
+ * own three or five controls is the point — nothing to hunt through.
  *
  * The DSP core and its parameter semantics are 4K EQ 2 by Dusk Audio
  * (GPL-3.0, github.com/dusk-audio/dusk-audio-plugins); see src/ported/.
@@ -120,30 +133,30 @@ static const char *const fkq_opts_os[3]    = { "1x", "2x", "4x" };
  * clip flag in get_param and the Out trim are for.
  */
 static const fkq_param_t fkq_params[FKQ_PARAM_COUNT] = {
-    { "lf_gain",      "LF",     FKQ_FLOAT,   -15,    15,     0, 0, 0, "dB", ".1f" },
-    { "lm_gain",      "LMF",    FKQ_FLOAT,   -15,    15,     0, 0, 0, "dB", ".1f" },
-    { "hm_gain",      "HMF",    FKQ_FLOAT,   -15,    15,     0, 0, 0, "dB", ".1f" },
-    { "hf_gain",      "HF",     FKQ_FLOAT,   -15,    15,     0, 0, 0, "dB", ".1f" },
+    { "lf_gain",      "GAIN",     FKQ_FLOAT,   -15,    15,     0, 0, 0, "dB", ".1f" },
+    { "lm_gain",      "GAIN",    FKQ_FLOAT,   -15,    15,     0, 0, 0, "dB", ".1f" },
+    { "hm_gain",      "GAIN",    FKQ_FLOAT,   -15,    15,     0, 0, 0, "dB", ".1f" },
+    { "hf_gain",      "GAIN",     FKQ_FLOAT,   -15,    15,     0, 0, 0, "dB", ".1f" },
     { "hpf_freq",     "HPF",    FKQ_FLOAT,    16,   350,    16, 0, 0, "Hz", ".0f" },
     { "lpf_freq",     "LPF",    FKQ_FLOAT,  3000, 15201, 15201, 0, 0, "Hz", ".0f" },
-    { "input_gain",   "In",     FKQ_FLOAT,   -12,    12,     0, 0, 0, "dB", ".1f" },
-    { "output_gain",  "Out",    FKQ_FLOAT,   -12,    12,     0, 0, 0, "dB", ".1f" },
+    { "input_gain",   "IN",     FKQ_FLOAT,   -12,    12,     0, 0, 0, "dB", ".1f" },
+    { "output_gain",  "OUT",    FKQ_FLOAT,   -12,    12,     0, 0, 0, "dB", ".1f" },
 
-    { "lf_freq",      "LF Hz",  FKQ_FLOAT,    30,   450,   200, 0, 0, "Hz", ".0f" },
-    { "lm_freq",      "LMF Hz", FKQ_FLOAT,   200,  2500,  1000, 0, 0, "Hz", ".0f" },
-    { "hm_freq",      "HMF Hz", FKQ_FLOAT,   600,  7000,  3000, 0, 0, "Hz", ".0f" },
-    { "hf_freq",      "HF Hz",  FKQ_FLOAT,  1500, 16000,  8000, 0, 0, "Hz", ".0f" },
-    { "lm_q",         "LMF Q",  FKQ_FLOAT,  0.5f,     3,  1.5f, 0, 0, 0,    ".2f" },
-    { "hm_q",         "HMF Q",  FKQ_FLOAT,  0.5f,     3,  1.5f, 0, 0, 0,    ".2f" },
-    { "lf_bell",      "LF Bell",  FKQ_ENUM,      0,     1,     0, fkq_opts_offon, 2, 0, 0 },
-    { "hf_bell",      "HF Bell",  FKQ_ENUM,      0,     1,     0, fkq_opts_offon, 2, 0, 0 },
+    { "lf_freq",      "FREQ",  FKQ_FLOAT,    30,   450,   200, 0, 0, "Hz", ".0f" },
+    { "lm_freq",      "FREQ", FKQ_FLOAT,   200,  2500,  1000, 0, 0, "Hz", ".0f" },
+    { "hm_freq",      "FREQ", FKQ_FLOAT,   600,  7000,  3000, 0, 0, "Hz", ".0f" },
+    { "hf_freq",      "FREQ",  FKQ_FLOAT,  1500, 16000,  8000, 0, 0, "Hz", ".0f" },
+    { "lm_q",         "Q",  FKQ_FLOAT,  0.5f,     3,  1.5f, 0, 0, 0,    ".2f" },
+    { "hm_q",         "Q",  FKQ_FLOAT,  0.5f,     3,  1.5f, 0, 0, 0,    ".2f" },
+    { "lf_bell",      "BELL",  FKQ_ENUM,      0,     1,     0, fkq_opts_offon, 2, 0, 0 },
+    { "hf_bell",      "BELL",  FKQ_ENUM,      0,     1,     0, fkq_opts_offon, 2, 0, 0 },
 
-    { "hpf_enabled",  "HPF On", FKQ_ENUM,      0,     1,     0, fkq_opts_offon, 2, 0, 0 },
-    { "lpf_enabled",  "LPF On", FKQ_ENUM,      0,     1,     0, fkq_opts_offon, 2, 0, 0 },
-    { "eq_type",      "Type",   FKQ_ENUM,      0,     1,     0, fkq_opts_type,  2, 0, 0 },
-    { "auto_gain",    "Auto",  FKQ_ENUM,      0,     1,     0, fkq_opts_offon, 2, 0, 0 },
-    { "oversampling", "OS",     FKQ_ENUM,      0,     2,     1, fkq_opts_os,    3, 0, 0 },
-    { "bypass",       "Byp",    FKQ_ENUM,      0,     1,     0, fkq_opts_offon, 2, 0, 0 },
+    { "hpf_enabled",  "HPF ON", FKQ_ENUM,      0,     1,     0, fkq_opts_offon, 2, 0, 0 },
+    { "lpf_enabled",  "LPF ON", FKQ_ENUM,      0,     1,     0, fkq_opts_offon, 2, 0, 0 },
+    { "eq_type",      "TYPE",   FKQ_ENUM,      0,     1,     0, fkq_opts_type,  2, 0, 0 },
+    { "auto_gain",    "A.GAIN", FKQ_ENUM,      0,     1,     0, fkq_opts_offon, 2, 0, 0 },
+    { "oversampling", "OVRSMP", FKQ_ENUM,      0,     2,     1, fkq_opts_os,    3, 0, 0 },
+    { "bypass",       "BYPASS", FKQ_ENUM,      0,     1,     0, fkq_opts_offon, 2, 0, 0 },
 };
 
 
@@ -183,6 +196,30 @@ static const char *const fkq_switch_viz[] = {
     "lf_bell", "hf_bell", "hpf_enabled", "lpf_enabled", "auto_gain", "bypass",
 };
 #define FKQ_SWITCH_VIZ_COUNT ((int)(sizeof fkq_switch_viz / sizeof fkq_switch_viz[0]))
+
+/* Params that must NOT get a graphic, because the detector's guess is wrong.
+ *
+ * A band's FREQ sitting next to its Q looks exactly like a filter's cutoff
+ * next to its resonance, and the detector says "filter" for LMF and HMF. It
+ * would then draw a lowpass response over a parametric BELL — a picture that
+ * states something false about the control. The docs are explicit that a
+ * declaration is the only way to correct a detector, and that a wrong graphic
+ * is worse than an honest dial. There is no "bell" kind to declare instead,
+ * so these four decline one. */
+static const char *const fkq_no_viz[] = {
+    "lm_freq", "lm_q", "hm_freq", "hm_q",
+};
+#define FKQ_NO_VIZ_COUNT ((int)(sizeof fkq_no_viz / sizeof fkq_no_viz[0]))
+
+static inline int fkq_is_no_viz(const char *key)
+{
+    for (int i = 0; i < FKQ_NO_VIZ_COUNT; i++) {
+        const char *a = fkq_no_viz[i], *b = key;
+        while (*a && *a == *b) { a++; b++; }
+        if (!*a && !*b) return 1;
+    }
+    return 0;
+}
 
 static inline int fkq_is_switch_viz(const char *key)
 {

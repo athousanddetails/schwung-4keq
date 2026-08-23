@@ -3,19 +3,51 @@
  "name": "4K EQ",
  "pages": [
   {
-   "name": "Main",
-   "params": ["lf_gain", "lm_gain", "hm_gain", "hf_gain",
-              "hpf_freq", "lpf_freq", "input_gain", "output_gain"]
+   "name": "LF",
+   "params": [
+    "lf_gain",
+    "lf_freq",
+    "lf_bell",
+    "hpf_freq",
+    "hpf_enabled"
+   ]
   },
   {
-   "name": "Bands",
-   "params": ["lf_freq", "lm_freq", "hm_freq", "hf_freq",
-              "lm_q", "hm_q", "lf_bell", "hf_bell"]
+   "name": "LMF",
+   "params": [
+    "lm_gain",
+    "lm_freq",
+    "lm_q"
+   ]
   },
   {
-   "name": "Setup",
-   "params": ["hpf_enabled", "lpf_enabled", "eq_type",
-              "auto_gain", "oversampling", "bypass"]
+   "name": "HMF",
+   "params": [
+    "hm_gain",
+    "hm_freq",
+    "hm_q"
+   ]
+  },
+  {
+   "name": "HF",
+   "params": [
+    "hf_gain",
+    "hf_freq",
+    "hf_bell",
+    "lpf_freq",
+    "lpf_enabled"
+   ]
+  },
+  {
+   "name": "MASTER",
+   "params": [
+    "eq_type",
+    "oversampling",
+    "bypass",
+    "auto_gain",
+    "input_gain",
+    "output_gain"
+   ]
   }
  ]
 }
