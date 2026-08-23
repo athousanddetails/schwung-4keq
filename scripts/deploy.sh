@@ -49,7 +49,7 @@ if [ -f "$SRC/build/fkq_loadtest" ]; then
     scp -q "$SRC/build/fkq_loadtest" "$HOST:$DEST/fkq_loadtest.new"
     ssh "$HOST" "cd $DEST && mv -f fkq_loadtest.new fkq_loadtest && chmod 755 fkq_loadtest"
     echo "==> on-device loadtest"
-    ssh "$HOST" "cd $DEST && ./fkq_loadtest ./$SO ./module.json" || {
+    ssh "$HOST" "cd $DEST && ./fkq_loadtest ./$SO ./module.json ./help.json" || {
         echo "!! loadtest FAILED on device — not reloading the slot" >&2; exit 1; }
 fi
 

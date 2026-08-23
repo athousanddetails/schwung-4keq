@@ -28,7 +28,7 @@ g++ -O2 -std=c++17 -Wall -Wextra -shared -fPIC \
     -o build-native/4k-eq.so -lm -lpthread
 g++ -O2 -std=c++17 -Wall tools/loadtest.cpp -Isrc/host \
     -o build-native/fkq_loadtest -ldl -lm
-./build-native/fkq_loadtest ./build-native/4k-eq.so src/module.json
+./build-native/fkq_loadtest ./build-native/4k-eq.so src/module.json src/help.json
 
 # ---- Cross-compile for the device.
 echo "=== cross-compile aarch64 ==="

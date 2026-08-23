@@ -481,6 +481,44 @@ int main(int argc, char **argv)
         }
     }
 
+    printf("\n== help.json describes the pages that exist ==\n");
+    if (argc > 3) {
+        /* help.json is hand-written and the pages are not, so it drifts
+         * silently: it went on describing a Main/Bands/Setup layout, and
+         * telling people to "turn their enables on in Setup", for several
+         * builds after the module became one page per band. Nothing failed,
+         * it just lied on the device. Tie it to the hierarchy. */
+        FILE *f = fopen(argv[3], "rb");
+        ok(f != nullptr, "help.json opens (%s)", argv[3]);
+        if (f) {
+            std::string hj; char c[4096]; size_t g;
+            while ((g = fread(c, 1, sizeof c, f)) > 0) hj.append(c, g);
+            fclose(f);
+            /* every level the hierarchy declares must have a help page; the
+             * root's page is drawn as "Main" whatever the level is called. */
+            static const char *const kWant[] = { "Main", "LF", "LMF", "HMF", "HF", "Preset" };
+            int absent = 0;
+            for (const char *w : kWant) {
+                const std::string pat = std::string("\"title\": \"") + w + "\"";
+                const std::string pat2 = std::string("\"title\":\"") + w + "\"";
+                if (hj.find(pat) == std::string::npos && hj.find(pat2) == std::string::npos) {
+                    printf("       help.json has no page for %s\n", w);
+                    absent++;
+                }
+            }
+            ok(absent == 0, "help.json covers all %d pages",
+               (int)(sizeof kWant / sizeof kWant[0]));
+            /* and must not still describe pages that were removed */
+            int stale = 0;
+            for (const char *g2 : { "Bands", "Setup" })
+                if (hj.find(std::string("\"") + g2 + "\"") != std::string::npos) {
+                    printf("       help.json still mentions the removed page %s\n", g2);
+                    stale++;
+                }
+            ok(stale == 0, "help.json describes no page that no longer exists");
+        }
+    }
+
     printf("\n== the snapshot a remote panel reads ==\n");
     {
         void *ti = api->create_instance(".", nullptr);
