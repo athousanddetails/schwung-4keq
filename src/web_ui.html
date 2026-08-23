@@ -318,9 +318,23 @@ function paint(){
   /* meters */
   meter(INX0,INX1,cY(MET_Y0),cY(MET_Y1),Math.max(num("in_peak_l",0),num("in_peak_r",0)),"IN");
   meter(OUTX0,OUTX1,cY(MET_Y0),cY(MET_Y1),Math.max(num("out_peak_l",0),num("out_peak_r",0)),"OUT");
-  if(num("clip",0)>0)clipHold=14;
+  /* CLIP, made unmissable.
+   *
+   * The Move's FX bus is 16-bit, so a boost does not run out of headroom
+   * inside the EQ — it runs out at the int16 conversion, outside it. Measured:
+   * a +12 dB HF boost on material peaking at -3 dBFS puts the output at 1.44
+   * (shelf) or 1.59 (bell), i.e. 3-4 dB PAST full scale, and every sample
+   * above 1.0 is clamped. The frequency response is untouched — 60 Hz moves
+   * by 0.12 dB — so what you hear is clipping, not the EQ losing low end, and
+   * there was nothing on screen saying so. A 12x4 px tick beside the meter
+   * was not it. */
+  if(num("clip",0)>0)clipHold=16;
   if(clipHold>0){
-    rr(OUTX0-1,cY(MET_Y0)-16,OUTX1+1,cY(MET_Y0)-4,2,"rgb(210,96,60)",null);
+    var bx0=scx-40,bx1=scx+40,by0=cY(612),by1=cY(636);
+    rr(bx0,by0,bx1,by1,3,"rgb(214,74,44)","rgb(255,150,120)",1.5);
+    txt("CLIP",(bx0+bx1)/2,(by0+by1)/2,12,"rgb(22,10,6)",null,true);
+    /* and light the top of the output meter, where the level actually died */
+    rr(OUTX0-1,cY(MET_Y0)-1,OUTX1+1,cY(MET_Y0)+22,2,"rgb(214,74,44)",null);
     clipHold--;
   }
 }
