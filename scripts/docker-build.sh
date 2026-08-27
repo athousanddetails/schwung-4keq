@@ -18,6 +18,13 @@ python3 tools/check_upstream_params.py
 echo "=== module.json is in sync with the parameter table ==="
 python3 tools/gen_module_json.py --check
 
+# Movy reads movy_config.json and nothing validates it at runtime — a wrong
+# shape just renders nothing, which is how 1.0.0 shipped a file Movy could
+# not read a single control from. Generated from the same C table as
+# everything else, and cross-checked against the shell's knob arrays.
+echo "=== movy_config is in sync with the pages ==="
+python3 tools/gen_movy_config.py --check
+
 # ---- Native build + loadtest FIRST, in-container, before cross-compiling.
 # A red test here fails the whole build.
 echo "=== native build + loadtest ==="

@@ -1,50 +1,233 @@
 {
- "module": "4k-eq",
+ "id": "4k-eq",
  "name": "4K EQ",
- "pages": [
+ "banks": [
   {
-   "name": "MASTER",
-   "params": [
-    "eq_type",
-    "oversampling",
-    "bypass",
-    "auto_gain",
-    "input_gain",
-    "output_gain"
+   "name": "Master",
+   "rows": [
+    [
+     {
+      "key": "eq_type",
+      "short": "TYPE",
+      "full": "Type",
+      "type": "enum",
+      "options": [
+       "Brown",
+       "Black"
+      ]
+     },
+     {
+      "key": "oversampling",
+      "short": "OVRSMP",
+      "full": "Oversample",
+      "type": "enum",
+      "options": [
+       "1x",
+       "2x",
+       "4x"
+      ]
+     },
+     {
+      "key": "bypass",
+      "short": "BYPASS",
+      "full": "Bypass",
+      "type": "enum",
+      "options": [
+       "Off",
+       "On"
+      ]
+     },
+     {
+      "key": "auto_gain",
+      "short": "A.GAIN",
+      "full": "Auto Gain",
+      "type": "enum",
+      "options": [
+       "Off",
+       "On"
+      ]
+     },
+     {
+      "key": "input_gain",
+      "short": "IN",
+      "full": "Input",
+      "type": "float",
+      "min": -12.0,
+      "max": 12.0
+     },
+     {
+      "key": "output_gain",
+      "short": "OUT",
+      "full": "Output",
+      "type": "float",
+      "min": -12.0,
+      "max": 12.0
+     },
+     null,
+     null
+    ]
    ]
   },
   {
    "name": "LF",
-   "params": [
-    "lf_gain",
-    "lf_freq",
-    "lf_bell",
-    "hpf_freq"
+   "rows": [
+    [
+     {
+      "key": "lf_gain",
+      "short": "GAIN",
+      "full": "LF Gain",
+      "type": "float",
+      "min": -15.0,
+      "max": 15.0
+     },
+     {
+      "key": "lf_freq",
+      "short": "FREQ",
+      "full": "LF Freq",
+      "type": "float",
+      "min": 30.0,
+      "max": 450.0
+     },
+     {
+      "key": "lf_bell",
+      "short": "BELL",
+      "full": "LF Bell",
+      "type": "enum",
+      "options": [
+       "Off",
+       "On"
+      ]
+     },
+     {
+      "key": "hpf_freq",
+      "short": "HPF",
+      "full": "HPF",
+      "type": "float",
+      "min": 16.0,
+      "max": 350.0
+     },
+     null,
+     null,
+     null,
+     null
+    ]
    ]
   },
   {
    "name": "LMF",
-   "params": [
-    "lm_gain",
-    "lm_freq",
-    "lm_q"
+   "rows": [
+    [
+     {
+      "key": "lm_gain",
+      "short": "GAIN",
+      "full": "LMF Gain",
+      "type": "float",
+      "min": -15.0,
+      "max": 15.0
+     },
+     {
+      "key": "lm_freq",
+      "short": "FREQ",
+      "full": "LMF Freq",
+      "type": "float",
+      "min": 200.0,
+      "max": 2500.0
+     },
+     {
+      "key": "lm_q",
+      "short": "Q",
+      "full": "LMF Q",
+      "type": "float",
+      "min": 0.5,
+      "max": 3.0
+     },
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
    ]
   },
   {
    "name": "HMF",
-   "params": [
-    "hm_gain",
-    "hm_freq",
-    "hm_q"
+   "rows": [
+    [
+     {
+      "key": "hm_gain",
+      "short": "GAIN",
+      "full": "HMF Gain",
+      "type": "float",
+      "min": -15.0,
+      "max": 15.0
+     },
+     {
+      "key": "hm_freq",
+      "short": "FREQ",
+      "full": "HMF Freq",
+      "type": "float",
+      "min": 600.0,
+      "max": 7000.0
+     },
+     {
+      "key": "hm_q",
+      "short": "Q",
+      "full": "HMF Q",
+      "type": "float",
+      "min": 0.5,
+      "max": 3.0
+     },
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
    ]
   },
   {
    "name": "HF",
-   "params": [
-    "hf_gain",
-    "hf_freq",
-    "hf_bell",
-    "lpf_freq"
+   "rows": [
+    [
+     {
+      "key": "hf_gain",
+      "short": "GAIN",
+      "full": "HF Gain",
+      "type": "float",
+      "min": -15.0,
+      "max": 15.0
+     },
+     {
+      "key": "hf_freq",
+      "short": "FREQ",
+      "full": "HF Freq",
+      "type": "float",
+      "min": 1500.0,
+      "max": 16000.0
+     },
+     {
+      "key": "hf_bell",
+      "short": "BELL",
+      "full": "HF Bell",
+      "type": "enum",
+      "options": [
+       "Off",
+       "On"
+      ]
+     },
+     {
+      "key": "lpf_freq",
+      "short": "LPF",
+      "full": "LPF",
+      "type": "float",
+      "min": 3000.0,
+      "max": 15201.0
+     },
+     null,
+     null,
+     null,
+     null
+    ]
    ]
   }
  ]

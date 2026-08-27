@@ -71,6 +71,11 @@ dry.
 
 ## Install
 
+**Requires Schwung 0.12.1 or newer.** The device UI is Schwung's own knob
+pages — they do not exist before 0.12, and the way this module declares its
+graphics landed in 0.12.1. On an older host the EQ loads and passes audio but
+has no knobs at all, so check your Schwung version first.
+
 Via the Schwung Module Store, or manually: copy `dist/4k-eq/` to
 `/data/UserData/schwung/modules/audio_fx/4k-eq/` on the device.
 

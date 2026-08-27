@@ -8,5 +8,6 @@
   "github_repo": "athousanddetails/schwung-4keq",
   "default_branch": "main",
   "asset_name": "4k-eq-module.tar.gz",
-  "min_host_version": "0.12.1"
+  "min_host_version": "0.12.1",
+  "requires": "Schwung 0.12.1 or newer — the module's device UI is the stock knob pages, which do not exist before 0.12, and it declares viz beside each param, which landed in 0.12.1"
 }

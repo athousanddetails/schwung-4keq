@@ -22,6 +22,12 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 UPSTREAM_URL = "https://github.com/dusk-audio/dusk-audio-plugins"
+# The revision src/ported/ was taken from. Compared against THIS, not against
+# whatever main happens to be: upstream ships other plugins out of the same
+# shared-daf directory, so tracking HEAD meant an unrelated Multi-Comp commit
+# turned every build in this repo red. Bumping it is a deliberate act — take
+# the files, prove the audio is unchanged, then move this.
+REV_FILE = pathlib.Path(__file__).resolve().parent.parent / "src/ported/UPSTREAM_REV"
 
 # vendored path (under src/ported/)  ->  upstream path (under the repo root)
 VENDORED = {
@@ -53,6 +59,7 @@ def main():
         str(p.relative_to(ported))
         for p in ported.rglob("*") if p.is_file()
     }
+    on_disk.discard("UPSTREAM_REV")   # the marker itself, not vendored code
     unlisted = sorted(on_disk - set(VENDORED))
     if unlisted:
         print("FAILED: files under src/ported/ that this gate does not check:")
@@ -64,20 +71,31 @@ def main():
     if "--skip-clone" in sys.argv:
         up = pathlib.Path(sys.argv[sys.argv.index("--skip-clone") + 1])
     else:
+        want = REV_FILE.read_text().strip() if REV_FILE.exists() else ""
+        if not want:
+            print("FAILED: src/ported/UPSTREAM_REV is missing or empty")
+            return 1
         tmp = tempfile.mkdtemp(prefix="fkq-upstream-")
         up = pathlib.Path(tmp)
         r = subprocess.run(
-            ["git", "clone", "-q", "--depth", "1", "--filter=blob:none",
-             "--sparse", UPSTREAM_URL, str(up)],
+            ["git", "clone", "-q", "--filter=blob:none", "--sparse",
+             UPSTREAM_URL, str(up)],
             capture_output=True, text=True)
+        if r.returncode == 0:
+            subprocess.run(["git", "-C", str(up), "sparse-checkout", "set",
+                            "plugins/shared-daf", "plugins/4k-eq"],
+                           capture_output=True)
+            co = subprocess.run(["git", "-C", str(up), "checkout", "-q", want],
+                                capture_output=True, text=True)
+            if co.returncode != 0:
+                print("FAILED: upstream has no revision %s" % want)
+                shutil.rmtree(tmp, ignore_errors=True)
+                return 1
         if r.returncode != 0:
             print("  (skipped: upstream not reachable — %s)"
                   % (r.stderr.strip().splitlines() or ["?"])[-1])
             shutil.rmtree(tmp, ignore_errors=True)
             return 0
-        subprocess.run(["git", "-C", str(up), "sparse-checkout", "set",
-                        "plugins/shared-daf", "plugins/4k-eq"],
-                       capture_output=True)
 
     rev = subprocess.run(["git", "-C", str(up), "rev-parse", "--short", "HEAD"],
                          capture_output=True, text=True).stdout.strip()
