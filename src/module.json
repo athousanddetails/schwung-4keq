@@ -235,6 +235,7 @@
    },
    {
     "key": "oversampling",
+    "short_name": "OVRSM",
     "name": "OVRSMP",
     "type": "enum",
     "options": [
