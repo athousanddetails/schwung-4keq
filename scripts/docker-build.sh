@@ -25,6 +25,12 @@ python3 tools/gen_module_json.py --check
 echo "=== movy_config is in sync with the pages ==="
 python3 tools/gen_movy_config.py --check
 
+# help.json fails silently in three separate ways on the device — wrong
+# top-level key and the loader drops the whole file, over-long lines lose
+# their tails at x=127, non-ASCII renders as a 1px gap. None of it logs.
+echo "=== help.json is in the shape the device reads ==="
+python3 tools/check_help.py
+
 # ---- Native build + loadtest FIRST, in-container, before cross-compiling.
 # A red test here fails the whole build.
 echo "=== native build + loadtest ==="

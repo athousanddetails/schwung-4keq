@@ -1,78 +1,132 @@
 {
  "title": "4K EQ",
- "summary": "British console EQ for the master bus. Four calibrated bands, stepped filters, Brown and Black voicings.",
- "pages": [
+ "children": [
+  {
+   "title": "Overview",
+   "lines": [
+    "British console EQ",
+    "for the master bus.",
+    "Four calibrated",
+    "bands, stepped high",
+    "and low-pass",
+    "filters, Brown and",
+    "Black voicings.",
+    "",
+    "DSP is 4K EQ 2 by",
+    "Dusk Audio."
+   ]
+  },
   {
    "title": "Main",
    "lines": [
-    "Type is the voicing. Brown is the",
-    "E-series: transformers, constant-Q",
-    "mids. Black is the G-series:",
-    "transformerless, proportional-Q.",
-    "Ovrsm 2x is the default; 1x saves",
-    "CPU and is clean in Brown.",
-    "In drives the console's own",
-    "nonlinearity. Out trims what",
-    "leaves. A.Gain offsets the level",
-    "your curve adds - off by default,",
-    "and it costs low end."
+    "Type: Brown is the",
+    "E-series -",
+    "transformers,",
+    "constant-Q mids.",
+    "Black is G-series:",
+    "transformerless,",
+    "proportional-Q.",
+    "",
+    "Ovrsmp 2x default.",
+    "1x saves CPU and is",
+    "clean in Brown.",
+    "",
+    "In drives the",
+    "console's own",
+    "nonlinearity.",
+    "Out trims output.",
+    "",
+    "A.Gain offsets the",
+    "level your curve",
+    "adds. Off by",
+    "default - it costs",
+    "low end."
    ]
   },
   {
    "title": "LF",
    "lines": [
-    "Gain +/-15 dB, Frq 30-450 Hz.",
-    "Bell switches the band from shelf",
+    "Gain +/-15 dB.",
+    "Frq 30-450 Hz.",
+    "Bell switches shelf",
     "to bell.",
-    "HPF is the stepped console filter.",
-    "Its bottom position is OUT, like",
-    "the dial it comes from - turn it",
-    "up and the filter comes in. There",
-    "is no separate switch."
+    "",
+    "HPF is the stepped",
+    "console filter. Its",
+    "bottom position is",
+    "OUT, like the dial",
+    "it comes from - turn",
+    "it up and the",
+    "filter comes in.",
+    "There is no",
+    "separate switch."
    ]
   },
   {
    "title": "LMF",
    "lines": [
-    "Gain +/-15 dB, Frq 200 Hz-2.5 kHz.",
-    "Q 0.5-3.0, always a bell.",
-    "The ranges overlap the bands",
-    "either side on purpose: they are",
-    "the console's own dials."
+    "Gain +/-15 dB.",
+    "Frq 200 Hz-2.5 kHz.",
+    "Q 0.5-3.0, always a",
+    "bell.",
+    "",
+    "Ranges overlap the",
+    "bands either side",
+    "on purpose - they",
+    "are the console's",
+    "own dials."
    ]
   },
   {
    "title": "HMF",
    "lines": [
-    "Gain +/-15 dB, Frq 600 Hz-7 kHz.",
-    "Q 0.5-3.0, always a bell.",
-    "Brown holds Q constant with gain;",
-    "Black widens it as you cut and",
-    "narrows it as you boost."
+    "Gain +/-15 dB.",
+    "Frq 600 Hz-7 kHz.",
+    "Q 0.5-3.0, always a",
+    "bell.",
+    "",
+    "Brown holds Q",
+    "constant with gain.",
+    "Black widens it as",
+    "you cut, narrows as",
+    "you boost."
    ]
   },
   {
    "title": "HF",
    "lines": [
-    "Gain +/-15 dB, Frq 1.5-16 kHz.",
-    "Bell switches the band from shelf",
+    "Gain +/-15 dB.",
+    "Frq 1.5-16 kHz.",
+    "Bell switches shelf",
     "to bell.",
-    "LPF is the stepped console filter,",
-    "OUT at the top of its travel.",
-    "The FX bus is 16-bit, so a hard",
-    "boost clips at the output, not in",
-    "the EQ. Pull Out down to match."
+    "",
+    "LPF is the stepped",
+    "console filter, OUT",
+    "at the top of its",
+    "travel.",
+    "",
+    "The FX bus is",
+    "16-bit, so a hard",
+    "boost clips at the",
+    "output, not in the",
+    "EQ. Pull Out down",
+    "to match."
    ]
   },
   {
    "title": "Preset",
    "lines": [
-    "INIT restores flat, then fourteen",
-    "factory programs from the plugin.",
-    "Recall sets the bands, filters and",
-    "voicing; it leaves Bypass and",
-    "Ovrsm alone - those are yours,",
-    "not the program's."
+    "INIT restores flat,",
+    "then 14 factory",
+    "programs from the",
+    "plugin.",
+    "",
+    "Recall sets bands,",
+    "filters and voicing.",
+    "It leaves Bypass and",
+    "Ovrsmp alone - those",
+    "are yours, not the",
+    "program's."
    ]
   }
  ]
