@@ -93,7 +93,7 @@ def build(entries):
         "id": "4k-eq",
         "name": "4K EQ",
         "abbrev": "4KEQ",
-        "version": "1.0.1",
+        "version": "1.0.2",
         "description": (
             "British console EQ: four calibrated bands with Brown and Black "
             "voicings, stepped high- and low-pass filters, shared-stage band "
