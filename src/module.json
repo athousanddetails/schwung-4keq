@@ -2,7 +2,7 @@
  "id": "4k-eq",
  "name": "4K EQ",
  "abbrev": "4KEQ",
- "version": "1.0.2",
+ "version": "1.0.3",
  "description": "British console EQ: four calibrated bands with Brown and Black voicings, stepped high- and low-pass filters, shared-stage band interaction and native console nonlinearity.",
  "author": "4K EQ 2 by Dusk Audio (GPL-3.0); port: athousanddetails",
  "dsp": "4k-eq.so",
