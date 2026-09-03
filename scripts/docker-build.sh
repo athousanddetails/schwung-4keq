@@ -18,13 +18,6 @@ python3 tools/check_upstream_params.py
 echo "=== module.json is in sync with the parameter table ==="
 python3 tools/gen_module_json.py --check
 
-# Movy reads movy_config.json and nothing validates it at runtime — a wrong
-# shape just renders nothing, which is how 1.0.0 shipped a file Movy could
-# not read a single control from. Generated from the same C table as
-# everything else, and cross-checked against the shell's knob arrays.
-echo "=== movy_config is in sync with the pages ==="
-python3 tools/gen_movy_config.py --check
-
 # help.json fails silently in three separate ways on the device — wrong
 # top-level key and the loader drops the whole file, over-long lines lose
 # their tails at x=127, non-ASCII renders as a 1px gap. None of it logs.
@@ -70,7 +63,6 @@ cp build/4k-eq.so       dist/4k-eq/
 cp src/module.json      dist/4k-eq/
 cp src/help.json        dist/4k-eq/
 cp src/web_ui.html      dist/4k-eq/
-cp src/movy_config.json dist/4k-eq/
 cp LICENSE              dist/4k-eq/
 (cd dist && tar -czf 4k-eq-module.tar.gz 4k-eq/)
 echo "Tarball: dist/4k-eq-module.tar.gz"

@@ -2,8 +2,7 @@
  *
  * The Move-facing parameter surface. Single source of truth: the DSP shell,
  * the chain_params JSON served via get_param, the state blob and ui_hierarchy
- * all iterate this table. movy_config.json mirrors it by hand —
- * tools/check_config.py fails the build if they drift.
+ * all iterate this table.
  *
  * ONE-TO-ONE WITH UPSTREAM. Every key, range and default below is copied from
  * kFourKParams in src/ported/daf-plugin/FourKEQParams.hpp, which is 4K EQ 2's

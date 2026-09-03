@@ -31,7 +31,6 @@ scp -q "$SRC/build/$SO"           "$HOST:$DEST/$SO.new"
 scp -q "$SRC/src/module.json"     "$HOST:$DEST/module.json.new"
 scp -q "$SRC/src/help.json"       "$HOST:$DEST/help.json.new"
 scp -q "$SRC/src/web_ui.html"     "$HOST:$DEST/web_ui.html.new"
-scp -q "$SRC/src/movy_config.json" "$HOST:$DEST/movy_config.json.new"
 
 # Atomic swap. Do NOT replace this with a direct scp.
 ssh "$HOST" "cd $DEST && \
@@ -39,7 +38,6 @@ ssh "$HOST" "cd $DEST && \
     mv -f module.json.new module.json && \
     mv -f help.json.new help.json && \
     mv -f web_ui.html.new web_ui.html && \
-    mv -f movy_config.json.new movy_config.json && \
     chmod 755 $SO && rm -f dsp.so && ls -l $SO module.json"
 
 # On-device loader test. Note what this does and does not prove: it dlopens
