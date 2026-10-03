@@ -33,6 +33,12 @@ add_library(fourk_eq SHARED
 target_include_directories(fourk_eq PRIVATE ${FKQ_INCLUDES})
 target_link_libraries(fourk_eq PRIVATE m pthread)
 target_link_options(fourk_eq PRIVATE ${FKQ_STATIC_LINK})
+# Keep the statically linked libstdc++'s symbols out of .dynsym. It exports
+# STB_GNU_UNIQUE objects (std::string::npos, the COW empty rep), and glibc
+# marks any DSO that exports a UNIQUE symbol NODELETE: dlclose() never unmaps
+# it, so the module's memory is never freed and reloading after an update
+# reuses the old image instead of the new file.
+target_link_options(fourk_eq PRIVATE -Wl,--exclude-libs,ALL)
 set_target_properties(fourk_eq PROPERTIES
     OUTPUT_NAME "4k-eq" PREFIX "" SUFFIX ".so")
 
